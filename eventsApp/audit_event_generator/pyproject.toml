@@ -1,0 +1,24 @@
+[project]
+name = "AuditEventGenerator"
+version = "0.1.0"
+description = "Audit event Generator."
+authors = [
+    {name = "Jojees",email = "joji@jojees.net"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.12.10"
+dependencies = [
+    "flask (>=3.1.1,<4.0.0)",
+    "pika (>=1.3.2,<2.0.0)",
+    "python-dotenv (>=1.1.1,<2.0.0)",
+    "prometheus-client (>=0.22.1,<0.23.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.requires-plugins]
+poetry-plugin-export = ">=1.8"

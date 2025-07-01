@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audit-event-generator
+  labels:
+    app: audit-event-generator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: audit-event-generator
+  template:
+    metadata:
+      labels:
+        app: audit-event-generator
+        # Label for Prometheus ServiceMonitor discovery (if used later)
+        prometheus_scrape: "true"
+    spec:
+      containers:
+      - name: generator-app
+        image: jojees/audit-event-generator:latest
+        env:
+        - name: RABBITMQ_HOST
+          value: "rabbitmq-service" # Matches the Kubernetes Service name
+        - name: RABBITMQ_USER
+          value: "jdevlab"
+        - name: RABBITMQ_PASS
+          value: "jdevlab"
+        - name: RABBITMQ_QUEUE
+          value: "audit_events"
+        - name: APP_PORT
+          value: "5000"
+        - name: PROMETHEUS_PORT
+          value: "8000"
+        - name: EVENT_GENERATION_INTERVAL_SECONDS
+          value: "1" # Generate events more frequently for testing
+        ports:
+        - containerPort: 5000
+          name: http-app
+        - containerPort: 8000
+          name: http-metrics
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http-app
+          initialDelaySeconds: 15 # Give time for RabbitMQ connection
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http-app
+          initialDelaySeconds: 20 # Give more time for RabbitMQ connection and initial readiness
+          periodSeconds: 10
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"

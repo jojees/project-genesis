@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: audit-log-analysis-service
+  labels:
+    app: audit-log-analysis
+spec:
+  selector:
+    app: audit-log-analysis
+  ports:
+  - protocol: TCP
+    port: 5001
+    targetPort: http-app
+    name: http-app
+  - protocol: TCP
+    port: 8001
+    targetPort: http-metrics # For Prometheus scraping
+    name: http-metrics
+  type: ClusterIP # Only accessible from within the cluster

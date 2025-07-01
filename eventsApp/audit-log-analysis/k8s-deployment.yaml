@@ -1,0 +1,74 @@
+# k8s-deployment.yaml (or your renamed deployment file)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audit-log-analysis
+  labels:
+    app: audit-log-analysis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: audit-log-analysis
+  template:
+    metadata:
+      labels:
+        app: audit-log-analysis
+        prometheus_scrape: "true"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+    spec:
+      containers:
+      - name: analysis-app
+        image: jojees/audit-log-analysis:modularv1
+        ports:
+        - containerPort: 5001
+          name: http-app # Define a named port for probes
+        - containerPort: 8001
+          name: http-metrics
+        env:
+        - name: RABBITMQ_HOST
+          value: rabbitmq-service
+        - name: RABBITMQ_USER
+          value: jdevlab
+        - name: RABBITMQ_PASS
+          value: jdevlab
+        - name: RABBITMQ_QUEUE
+          value: audit_events
+        - name: APP_PORT
+          value: "5001"
+        - name: PROMETHEUS_PORT
+          value: "8001"
+        - name: REDIS_HOST
+          value: redis-service
+        - name: REDIS_PORT
+          value: "6379"
+        # - name: REDIS_PASSWORD # Uncomment and set if Redis requires password
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: redis-secret # Name of your Kubernetes secret for Redis password
+        #       key: password
+        resources:
+          limits:
+            cpu: 200m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http-app
+          initialDelaySeconds: 45
+          periodSeconds: 15
+          timeoutSeconds: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http-app # Using named port defined above
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 1
+          failureThreshold: 3

@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-service # This is the DNS name other services will use (e.g., "rabbitmq-service")
+  labels:
+    app: rabbitmq
+spec:
+  selector:
+    app: rabbitmq
+  ports:
+  - protocol: TCP
+    port: 5672 # Service port
+    targetPort: amqp # Target container port name
+    name: amqp
+  - protocol: TCP
+    port: 15672 # Service port for management UI
+    targetPort: management-ui # Target container port name
+    name: management-ui
+  type: ClusterIP # Only accessible from within the cluster

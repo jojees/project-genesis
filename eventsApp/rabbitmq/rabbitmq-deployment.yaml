@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+  labels:
+    app: rabbitmq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      containers:
+      - name: rabbitmq
+        image: rabbitmq:3-management-alpine
+        env:
+        - name: RABBITMQ_DEFAULT_USER
+          value: "jdevlab"
+        - name: RABBITMQ_DEFAULT_PASS
+          value: "jdevlab"
+        ports:
+        - containerPort: 5672 # AMQP port for client connections
+          name: amqp
+        - containerPort: 15672 # Management UI port
+          name: management-ui
+        livenessProbe: # Basic liveness probe to check if the app is still running
+          exec:
+            command: ["rabbitmq-diagnostics", "ping"]
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe: # Readiness probe to check if the app is ready to serve requests
+          exec:
+            command: ["rabbitmq-diagnostics", "status"]
+          initialDelaySeconds: 45
+          periodSeconds: 15
+          timeoutSeconds: 5
+        # Optional: Add persistence for message durability. For a simple lab, you can skip this initially
+        # but it's good practice for real audit logs.
+        # volumeMounts:
+        # - name: rabbitmq-data
+        #   mountPath: /var/lib/rabbitmq
+      # Optional: Define persistent volume claim for data if you added volumeMounts
+      # volumes:
+      # - name: rabbitmq-data
+      #   persistentVolumeClaim:
+      #     claimName: rabbitmq-pvc
