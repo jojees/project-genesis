@@ -15,6 +15,9 @@ RABBITMQ_QUEUE = os.environ.get('RABBITMQ_QUEUE', 'audit_events')
 APP_PORT = int(os.environ.get('APP_PORT', 5001))
 PROMETHEUS_PORT = int(os.environ.get('PROMETHEUS_PORT', 8001))
 
+# --- NEW: RabbitMQ Queue for Alerts ---
+RABBITMQ_ALERT_QUEUE = os.environ.get('RABBITMQ_ALERT_QUEUE', 'audit_alerts')
+
 REDIS_HOST = os.environ.get('REDIS_HOST', 'redis-service')
 REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
 
