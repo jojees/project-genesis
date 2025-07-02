@@ -1,0 +1,12 @@
+# postgres-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pv-claim
+spec:
+  accessModes:
+    - ReadWriteOnce # This means the volume can be mounted as read-write by a single node
+  resources:
+    requests:
+      storage: 5Gi # Request 5 GB of storage. Adjust as needed.
+  storageClassName: local-path # Or whatever storage class is available in your K3s setup. 'standard' is common.

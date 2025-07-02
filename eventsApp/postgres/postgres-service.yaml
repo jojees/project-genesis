@@ -1,0 +1,13 @@
+# postgres-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service # Must match the serviceName in the StatefulSet
+spec:
+  selector:
+    app: postgres # Selects pods with this label (i.e., your PostgreSQL pod)
+  ports:
+    - protocol: TCP
+      port: 5432       # Port exposed by the Service (Kubernetes internal port)
+      targetPort: 5432 # Port on the container (PostgreSQL's default port)
+  type: ClusterIP # Exposes the service internally within the cluster

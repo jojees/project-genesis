@@ -1,0 +1,32 @@
+# postgres-statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: "postgres-service" # Must match the name of the Headless Service (defined next)
+  replicas: 1 # Start with 1 replica for a single database instance
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine # Using a lightweight PostgreSQL image
+          ports:
+            - containerPort: 5432 # Default PostgreSQL port
+              name: postgres
+          envFrom: # Load environment variables from the Secret
+            - secretRef:
+                name: postgres-credentials
+          volumeMounts: # Mount the persistent volume
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data # Official PostgreSQL data directory
+      volumes: # Define the volume, referencing the PVC
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pv-claim
