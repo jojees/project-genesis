@@ -5,7 +5,7 @@ import json
 import time
 import datetime
 import uuid
-import os # NEW: Added for os.environ.get('ENVIRONMENT')
+import os
 
 from . import config
 from . import metrics
@@ -115,24 +115,25 @@ def _analyze_failed_login_attempts(event: dict, event_timestamp: str, user_id: s
     """
     Analyzes failed login attempts using Redis for rate limiting.
     Publishes an alert if the threshold is exceeded.
+    Returns True if the event was processed (alerted or not), False on transient error.
     """
     if not redis_service.redis_client:
         logger.error("Analysis Rule: Redis client is not initialized or connected for failed login analysis. Skipping.")
-        return False # Indicate no alert due to dependency issue
+        return False # Indicate transient error, message should be requeued
 
+    logger.debug(f"Analyzing failed login: User='{user_id}', Host='{server_hostname}', Event_ID='{event.get('event_id')}', Full_Event={event}")
+    
     current_unix_timestamp = time.time()
-    current_iso_timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds') + "Z" 
-
     zset_key = f"failed_logins_zset:{user_id}:{server_hostname}"
 
     try:
         pipe = redis_service.redis_client.pipeline()
-        pipe.zadd(zset_key, {current_iso_timestamp: current_unix_timestamp})
+        pipe.zadd(zset_key, {event.get('event_id', str(uuid.uuid4())): current_unix_timestamp}) 
         pipe.zremrangebyscore(zset_key, 0, current_unix_timestamp - config.FAILED_LOGIN_WINDOW_SECONDS)
         pipe.zcard(zset_key)
-        pipe.expire(zset_key, config.FAILED_LOGIN_WINDOW_SECONDS + 60) # Set expiry on the key itself
+        pipe.expire(zset_key, config.FAILED_LOGIN_WINDOW_SECONDS + 60)
         results = pipe.execute()
-        current_attempts_in_window = results[-1]
+        current_attempts_in_window = int(results[2]) # Correctly get ZCARD result
 
         logger.debug(f"Analysis Rule: User '{user_id}' on '{server_hostname}': {current_attempts_in_window} failed attempts in window (Redis ZSET).")
 
@@ -181,20 +182,28 @@ def _analyze_failed_login_attempts(event: dict, event_timestamp: str, user_id: s
                     "playbook_url": "https://example.com/playbooks/failed_login_burst"
                 }
             }
-            return _publish_alert(alert_payload) # Return True/False if alert was published successfully
-        return False # No alert triggered by this rule
+            if _publish_alert(alert_payload):
+                logger.info(f"Analysis Rule: ALERT PUBLISHED - '{alert_name}' for user '{user_id}'.")
+                return True # Alert successfully published
+            else:
+                logger.error(f"Analysis Rule: ALERT PUBLICATION FAILED - '{alert_name}' for user '{user_id}'.")
+                return False # Alert condition met but failed to publish (should requeue)
+        else:
+            logger.debug(f"Analysis Rule: No alert triggered for user '{user_id}' on '{server_hostname}'. Attempts: {current_attempts_in_window}")
+            return True # Event processed, no alert triggered, so acknowledge
     except redis.exceptions.ConnectionError as e:
         health_manager.set_redis_status(False)
         logger.error(f"Analysis Rule: Redis connection error during failed login analysis: {e}.", exc_info=True)
-        return False
+        return False # Requeue due to transient Redis error
     except Exception as e:
         logger.exception(f"Analysis Rule: Unexpected error in Redis-based failed login analysis for user '{user_id}': {e}.")
-        return False
+        return False # Requeue due to unexpected error
 
 def _analyze_critical_file_modifications(event: dict, event_timestamp: str, user_id: str, server_hostname: str, resource: str):
     """
     Analyzes for modifications to predefined sensitive files.
     Publishes an alert if a sensitive file is modified.
+    Returns True if the event was processed (alerted or not), False on transient error.
     """
     if any(sensitive_file in resource for sensitive_file in config.SENSITIVE_FILES):
         alert_name = "Sensitive File Modification Detected"
@@ -241,8 +250,15 @@ def _analyze_critical_file_modifications(event: dict, event_timestamp: str, user
                 "playbook_url": "https://example.com/playbooks/sensitive_file_modified"
             }
         }
-        return _publish_alert(alert_payload)
-    return False # No alert triggered by this rule
+        if _publish_alert(alert_payload):
+            logger.info(f"Analysis Rule: ALERT PUBLISHED - '{alert_name}' for resource '{resource}'.")
+            return True # Alert successfully published
+        else:
+            logger.error(f"Analysis Rule: ALERT PUBLICATION FAILED - '{alert_name}' for resource '{resource}'.")
+            return False # Alert condition met but failed to publish (should requeue)
+    else:
+        logger.debug(f"Analysis Rule: File '{resource}' is not a sensitive file. No alert triggered.")
+        return True # Event processed, no alert triggered, so acknowledge
 
 
 def on_message_callback(ch, method, properties, body):
@@ -263,31 +279,35 @@ def on_message_callback(ch, method, properties, body):
         server_hostname = event.get('server_hostname', 'unknown')
         resource = event.get('resource', '')
 
-        # Dispatch to analysis rules
-        alert_result_failed_login = False
+        # Assume success unless a rule explicitly returns False (meaning transient failure)
+        processed_successfully = True
+
         if event.get('event_type') == 'user_login' and event.get('action_result') == 'FAILURE':
-            alert_result_failed_login = _analyze_failed_login_attempts(event, event_timestamp, user_id, server_hostname)
-            if not alert_result_failed_login: # If analysis failed to publish due to internal error, requeue
-                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-                 return
-
-
-        alert_result_sensitive_file = False
-        if event.get('event_type') == 'file_modified' and event.get('action_result') == 'MODIFIED':
-            alert_result_sensitive_file = _analyze_critical_file_modifications(event, event_timestamp, user_id, server_hostname, resource)
-            if not alert_result_sensitive_file: # If analysis failed to publish due to internal error, requeue
-                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-                 return
+            # If _analyze_failed_login_attempts returns False, it means a transient error occurred
+            # and the message should be NACKed and requeued.
+            if not _analyze_failed_login_attempts(event, event_timestamp, user_id, server_hostname):
+                processed_successfully = False 
+        elif event.get('event_type') == 'file_modified' and event.get('action_result') == 'MODIFIED':
+            # If _analyze_critical_file_modifications returns False, it means a transient error occurred
+            # and the message should be NACKed and requeued.
+            if not _analyze_critical_file_modifications(event, event_timestamp, user_id, server_hostname, resource):
+                processed_successfully = False
+        # Add more `elif` blocks for future rules here.
+        # If an event doesn't match any of the explicit 'if/elif' rules,
+        # it falls through and 'processed_successfully' remains True, leading to an ACK.
         
-        # If no internal analysis errors prevented alert publication, acknowledge the message
-        # Each rule handles its own errors and decides if it needs to nack,
-        # otherwise we assume successful processing.
-        ch.basic_ack(delivery_tag=method.delivery_tag)
-        logger.debug(f"RabbitMQ Consumer: Message {method.delivery_tag} acknowledged.")
+        if processed_successfully:
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+            logger.debug(f"RabbitMQ Consumer: Message {method.delivery_tag} acknowledged.")
+        else:
+            # Only NACK if a specific analysis rule indicated a transient failure
+            # This message will be requeued by RabbitMQ
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            logger.warning(f"RabbitMQ Consumer: Message {method.delivery_tag} NACKed and requeued due to internal analysis/publish failure.")
 
     except json.JSONDecodeError as e:
         logger.error(f"RabbitMQ Consumer: Error decoding JSON message: {e} - Body: {body.decode('utf-8', errors='ignore')}. Not requeuing.")
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False) # Do not requeue malformed messages
     except Exception as e:
         logger.exception(f"RabbitMQ Consumer: Error processing event outside specific rule: {e} - Event body: {body.decode('utf-8', errors='ignore')}. Requeuing.")
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)

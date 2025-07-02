@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - name: analysis-app
-        image: jojees/audit-log-analysis:modularv1
+        image: jojees/audit-log-analysis:ph3.6
         ports:
         - containerPort: 5001
           name: http-app # Define a named port for probes
