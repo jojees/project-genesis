@@ -206,3 +206,66 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 .python-version
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.komodoproject
+*.DS_Store # macOS
+Thumbs.db # Windows
+
+# Testing
+.pytest_cache/
+.coverage
+.tox/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+*.swp
+
+# Jupyter Notebook files
+.ipynb_checkpoints/
+
+# Database files
+*.sqlite3
+*.db
