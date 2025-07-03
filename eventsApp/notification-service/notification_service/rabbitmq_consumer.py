@@ -7,6 +7,7 @@ import logging
 import uuid
 # No longer need 'threading' for this approach
 # import threading 
+from psycopg.errors import UniqueViolation
 
 from . import postgres_service
 from . import config
@@ -130,7 +131,7 @@ class RabbitMQConsumer:
 
     async def on_message_callback(self, ch, method, properties, body):
         logger.debug(f"DEBUG: >>> Entered on_message_callback for message ID: {method.delivery_tag} <<<")
-        logger.debug(f"DEBUG: Message Body (first 100 chars): {body[:100].decode()}")
+        # logger.debug(f"DEBUG: Message Body (first 100 chars): {body[:100].decode()}")
 
         message_id = method.delivery_tag 
 
@@ -149,7 +150,11 @@ class RabbitMQConsumer:
             else:
                 logger.error(f"RabbitMQ Consumer: Failed to insert alert {alert_id} into PostgreSQL (known error). NACKing message {message_id} for requeue.")
                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True) 
-
+        except UniqueViolation:
+            # Explicitly caught a UniqueViolation: this means it's a known duplicate.
+            # ACK the message to remove it from the queue.
+            logger.info(f"RabbitMQ Consumer: Alert ID '{alert_id}' is a duplicate. Acknowledging message {message_id} to remove it from queue.")
+            ch.basic_ack(delivery_tag=method.delivery_tag)
         except json.JSONDecodeError as e:
             logger.error(f"RabbitMQ Consumer: Failed to decode JSON message {message_id}: {e}. Body: {body.decode()}", exc_info=True)
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False) 

@@ -203,7 +203,7 @@ async def insert_alert(alert_payload: dict) -> bool:
                 await acur.execute(insert_sql, (
                     alert_id, correlation_id, timestamp, alert_name, alert_type, severity, description,
                     source_service_name, rule_id, rule_name,
-                    actor_type, actor_id, client_ip_for_db, # <--- THIS IS THE MODIFIED LINE
+                    actor_type, actor_id, client_ip_for_db,
                     resource_type, resource_id, server_hostname, action_observed,
                     # Convert dicts to JSON strings for JSONB columns
                     json.dumps(analysis_rule_details_jsonb),
@@ -217,7 +217,9 @@ async def insert_alert(alert_payload: dict) -> bool:
                 return True
     except UniqueViolation as e:
         logger.warning(f"PostgreSQL: Alert with ID {alert_payload.get('alert_id')} already exists. Skipping insertion. Error: {e}", exc_info=True)
-        return False
+        # return False 
+        # Switching to raise an exception, so that rabbitmq_consumer can ack the message to avoid duplication.
+        raise e
     except OperationalError as e:
         logger.error(f"PostgreSQL: Database operational error inserting alert {alert_payload.get('alert_id')}: {e}", exc_info=True)
         if pg_connection_pool: 

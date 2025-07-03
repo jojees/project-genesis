@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service-deployment
+  labels:
+    app: notification-service
+spec:
+  replicas: 1 # Start with 1 replica; you can scale this up later if needed
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      containers:
+      - name: notification-service
+        image: jojees/notification-service:0.1.1
+        ports:
+        - containerPort: 8000 # Matches the EXPOSE 8000 in your Dockerfile (for future API)
+        env:
+        # RabbitMQ Connection Details
+        # Consider using a Kubernetes Secret for credentials
+        - name: RABBITMQ_HOST
+          value: "rabbitmq-service"
+        - name: RABBITMQ_PORT
+          value: "5672"
+        - name: RABBITMQ_USER
+          value: "jdevlab"
+        - name: RABBITMQ_PASS
+          value: "jdevlab"
+
+        # PostgreSQL Connection Details
+        - name: PG_HOST
+          value: "postgres-service" # Assuming your PostgreSQL ClusterIP Service name is 'postgres-service'
+        - name: PG_PORT
+          value: "5432" # Default PostgreSQL port
+        - name: PG_DB
+          # Consider using a Kubernetes Secret for credentials
+          # value: "alerts_db" # Replace with your PostgreSQL database name or use Secret
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials # Name of the Kubernetes Secret
+              key: POSTGRES_DB 
+        - name: PG_USER
+          # For sensitive data like passwords, it's best practice to use Secrets
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials # Name of the Kubernetes Secret
+              key: POSTGRES_USER              # Key within the Secret that holds the username
+        - name: PG_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials # Name of the Kubernetes Secret
+              key: POSTGRES_PASSWORD          # Key within the Secret that holds the password
+
+        # Resource requests/limits (highly recommended for production)
+        # These are examples; adjust based on your service's needs
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        # Add liveness and readiness probes once you have a health endpoint in your app (e.g., /health)
+        # initialDelaySeconds: 10
+        # periodSeconds: 5
+        # httpGet:
+        #   path: /health
+        #   port: 8000
