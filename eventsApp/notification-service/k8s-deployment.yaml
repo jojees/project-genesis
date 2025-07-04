@@ -1,11 +1,11 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: notification-service-deployment
+  name: notification-service
   labels:
     app: notification-service
 spec:
-  replicas: 1 # Start with 1 replica; you can scale this up later if needed
+  replicas: 1
   selector:
     matchLabels:
       app: notification-service
@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: notification-service
-        image: jojees/notification-service:0.1.1
+        image: jojees/notification-service:0.1.2
         ports:
         - containerPort: 8000 # Matches the EXPOSE 8000 in your Dockerfile (for future API)
         env:
@@ -30,6 +30,20 @@ spec:
           value: "jdevlab"
         - name: RABBITMQ_PASS
           value: "jdevlab"
+        - name: RABBITMQ_ALERT_QUEUE
+          value: "audit_alerts"
+
+        # Service details
+        - name: SERVICE_NAME
+          value: "NotificationService"
+        - name: ENVIRONMENT
+          value: "pilab"
+        - name: API_HOST
+          value: "0.0.0.0"
+        - name: API_PORT
+          value: "8000"
+        - name: log_level
+          value: INFO
 
         # PostgreSQL Connection Details
         - name: PG_HOST

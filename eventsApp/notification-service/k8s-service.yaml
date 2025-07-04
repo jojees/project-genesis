@@ -1,0 +1,22 @@
+# eventsApp/notification-service/k8s-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service # This is the DNS name other services will use (e.g., in event-audit-dashboard's NOTIFICATION_SERVICE_HOST)
+  labels:
+    app: notification-service
+spec:
+  selector:
+    app: notification-service
+  ports:
+    - protocol: TCP
+      port: 8000      # The port the service exposes (e.g., notification-service:8000)
+      targetPort: 8000 # The port on the pod that the service should send traffic to
+      name: http-api  # Name for this port, useful for multiple ports
+    # If you have another port for health checks or metrics, define it here
+    # - protocol: TCP
+    #   port: 5000
+    #   targetPort: 5000
+    #   name: http-metrics
+  type: ClusterIP # Use ClusterIP for inter-service communication within the cluster
+                  # Change to NodePort or LoadBalancer if you need external access for direct testing (less common for API backend)

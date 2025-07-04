@@ -1,25 +1,36 @@
-# eventsApp/notification-service/notification_service/config.py
+# notification_service/notification_service/config.py
 import os
-from dotenv import load_dotenv
-load_dotenv()
+from pydantic import Field # Assuming you're using pydantic for Config
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# RabbitMQ Configuration
-RABBITMQ_HOST = os.environ.get('RABBITMQ_HOST', 'localhost')
-RABBITMQ_PORT = int(os.environ.get('RABBITMQ_PORT', 5672))
-RABBITMQ_USER = os.environ.get('RABBITMQ_USER', 'guest')
-RABBITMQ_PASS = os.environ.get('RABBITMQ_PASS', 'guest')
-RABBITMQ_ALERT_QUEUE = os.environ.get('RABBITMQ_ALERT_QUEUE', 'audit_alerts')
+# Assuming your Config class looks something like this:
+class Config(BaseSettings): # Or just a regular class if not using pydantic-settings
+    model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8')
 
-# PostgreSQL Configuration
-PG_HOST = os.environ.get('PG_HOST', 'localhost')
-PG_PORT = int(os.environ.get('PG_PORT', 5432))
-PG_DB = os.environ.get('PG_DB', 'postgres')
-PG_USER = os.environ.get('PG_USER', 'postgres')
-PG_PASSWORD = os.environ.get('PG_PASSWORD', 'your_strong_postgres_password') # Use same as k8s secret
+    # RabbitMQ Configuration
+    rabbitmq_host: str = Field(..., env="RABBITMQ_HOST")
+    rabbitmq_port: int = Field(..., env="RABBITMQ_PORT")
+    rabbitmq_user: str = Field(..., env="RABBITMQ_USER")
+    rabbitmq_pass: str = Field(..., env="RABBITMQ_PASS")
+    rabbitmq_alert_queue: str = Field(..., env="RABBITMQ_ALERT_QUEUE")
 
-# Service specific
-SERVICE_NAME = os.environ.get('SERVICE_NAME', 'notification-service')
-ENVIRONMENT = os.environ.get('ENVIRONMENT', 'DEVELOPMENT')
+    # PostgreSQL Configuration
+    pg_host: str = Field(..., env="PG_HOST")
+    pg_port: int = Field(..., env="PG_PORT")
+    pg_db: str = Field(..., env="PG_DB")
+    pg_user: str = Field(..., env="PG_USER")
+    pg_password: str = Field(..., env="PG_PASSWORD")
 
-# Logging level
-LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+    # Service specific
+    service_name: str = Field(..., env="SERVICE_NAME")
+    environment: str = Field(..., env="ENVIRONMENT")
+
+    # Logging level
+    log_level: str = Field(..., env="LOG_LEVEL")
+
+    # --- NEW: API Configuration for Notification Service itself ---
+    api_host: str = Field(..., env="API_HOST")
+    api_port: int = Field(..., env="API_PORT")
+
+def load_config() -> Config:
+    return Config()

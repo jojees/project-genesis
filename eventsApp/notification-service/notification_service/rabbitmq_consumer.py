@@ -1,28 +1,27 @@
-# eventsApp/notification-service/notification_service/rabbitmq_consumer.py
+# notification_service/notification_service/rabbitmq_consumer.py
 import pika
-import pika.adapters.asyncio_connection # Import the asyncio adapter
+import pika.adapters.asyncio_connection
 import json
 import asyncio
 import logging
 import uuid
-# No longer need 'threading' for this approach
-# import threading 
-from psycopg.errors import UniqueViolation
+import psycopg.errors # Import for UniqueViolation handling
 
-from . import postgres_service
-from . import config
+from notification_service.postgres_service import PostgreSQLService
+from notification_service.config import Config
 from .logger_config import logger
 
 class RabbitMQConsumer:
-    def __init__(self, queue_name):
-        self.queue_name = queue_name
+    def __init__(self, config: Config, pg_service: PostgreSQLService):
+        self.config = config
+        self.pg_service = pg_service
+        self.queue_name = config.rabbitmq_alert_queue
         self.connection = None
         self.channel = None
-        # No longer need a separate consumer thread object
-        self._consumer_thread = None 
         self.connected = False
         self._closing = False
         self._consumer_tag = None
+        logger.info(f"RabbitMQConsumer initialized for queue '{self.queue_name}'.")
 
     async def connect(self):
         """Establishes an asynchronous connection to RabbitMQ."""
@@ -30,41 +29,35 @@ class RabbitMQConsumer:
             logger.debug("RabbitMQ: Already connected.")
             return True
 
-        logger.info(f"RabbitMQ: Attempting to connect to {config.RABBITMQ_HOST}:{config.RABBITMQ_PORT} using AsyncioConnection...")
+        logger.info(f"RabbitMQ: Attempting to connect to {self.config.rabbitmq_host}:{self.config.rabbitmq_port} using AsyncioConnection...")
         
         try:
-            credentials = pika.PlainCredentials(config.RABBITMQ_USER, config.RABBITMQ_PASS)
+            credentials = pika.PlainCredentials(self.config.rabbitmq_user, self.config.rabbitmq_pass)
             parameters = pika.ConnectionParameters(
-                host=config.RABBITMQ_HOST,
-                port=config.RABBITMQ_PORT,
+                host=self.config.rabbitmq_host,
+                port=self.config.rabbitmq_port,
                 credentials=credentials,
                 heartbeat=600,
                 virtual_host='/'
             )
             
-            # Create a Future that will be set when the connection is established
             self._connection_future = asyncio.Future()
-            
-            # --- CRITICAL CHANGE HERE: Instantiate AsyncioConnection directly ---
             self.connection = pika.adapters.asyncio_connection.AsyncioConnection(parameters,
                 on_open_callback=lambda conn: asyncio.get_event_loop().call_soon_threadsafe(self.on_connection_open, conn),
                 on_open_error_callback=lambda conn, err: asyncio.get_event_loop().call_soon_threadsafe(self.on_connection_error, conn, err),
                 on_close_callback=lambda conn, exc: asyncio.get_event_loop().call_soon_threadsafe(self.on_connection_closed, conn, exc)
             )
             
-            # Wait for connection to be open
             await self._connection_future
             self.connected = True
             logger.info("RabbitMQ: Successfully established AsyncioConnection.")
             
-            # Open a channel
             self._channel_future = asyncio.Future()
             self.connection.channel(on_open_callback=lambda ch: asyncio.get_event_loop().call_soon_threadsafe(self.on_channel_open, ch))
             await self._channel_future
             
             logger.info("RabbitMQ: Channel opened successfully.")
             
-            # Declare queue - needs to be done on the channel
             self._queue_declare_future = asyncio.Future()
             self.channel.queue_declare(
                 queue=self.queue_name, 
@@ -128,10 +121,9 @@ class RabbitMQConsumer:
         if not self._queue_declare_future.done():
             self._queue_declare_future.set_result(True)
 
-
     async def on_message_callback(self, ch, method, properties, body):
         logger.debug(f"DEBUG: >>> Entered on_message_callback for message ID: {method.delivery_tag} <<<")
-        # logger.debug(f"DEBUG: Message Body (first 100 chars): {body[:100].decode()}")
+        logger.debug(f"DEBUG: Message Body (first 100 chars): {body[:100].decode()}")
 
         message_id = method.delivery_tag 
 
@@ -143,16 +135,16 @@ class RabbitMQConsumer:
             logger.info(f"RabbitMQ Consumer: Received alert '{alert_payload.get('alert_name')}' (ID: {alert_id}, Corr ID: {correlation_id}) from queue. Message ID: {message_id}")
             
             logger.debug(f"RabbitMQ Consumer: Attempting insert for alert '{alert_payload.get('alert_name')}' (ID: {alert_id}).")
-            success = await postgres_service.insert_alert(alert_payload) # This await will now truly yield control
+            # Use the pg_service instance passed in the constructor
+            success = await self.pg_service.insert_alert(alert_payload) 
             if success:
                 ch.basic_ack(delivery_tag=method.delivery_tag)
                 logger.info(f"RabbitMQ Consumer: Message {message_id} acknowledged for alert '{alert_payload.get('alert_name')}'.")
             else:
-                logger.error(f"RabbitMQ Consumer: Failed to insert alert {alert_id} into PostgreSQL (known error). NACKing message {message_id} for requeue.")
+                logger.error(f"RabbitMQ Consumer: Failed to insert alert {alert_id} into PostgreSQL (non-duplicate DB error). NACKing message {message_id} for requeue.")
                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True) 
-        except UniqueViolation:
-            # Explicitly caught a UniqueViolation: this means it's a known duplicate.
-            # ACK the message to remove it from the queue.
+
+        except psycopg.errors.UniqueViolation:
             logger.info(f"RabbitMQ Consumer: Alert ID '{alert_id}' is a duplicate. Acknowledging message {message_id} to remove it from queue.")
             ch.basic_ack(delivery_tag=method.delivery_tag)
         except json.JSONDecodeError as e:
@@ -172,7 +164,7 @@ class RabbitMQConsumer:
             logger.error("RabbitMQ: Channel not established. Cannot start consuming.")
             return
 
-        if self._consumer_tag: # Already consuming
+        if self._consumer_tag: 
             logger.debug("RabbitMQ Consumer: Already consuming.")
             return
 
@@ -193,7 +185,7 @@ class RabbitMQConsumer:
                 if self._consumer_tag:
                     logger.info("RabbitMQ: Issuing basic_cancel to stop consuming.")
                     self.channel.basic_cancel(self._consumer_tag)
-                    await asyncio.sleep(0.1) # Give it a moment to process
+                    await asyncio.sleep(0.1) 
                     self._consumer_tag = None
             except Exception as e:
                 logger.warning(f"RabbitMQ: Error during basic_cancel: {e}")
@@ -209,7 +201,7 @@ class RabbitMQConsumer:
             logger.info("RabbitMQ: Closing connection.")
             try:
                 self.connection.close()
-                await asyncio.sleep(0.1) # Give it a moment to process
+                await asyncio.sleep(0.1) 
             except Exception as e:
                 logger.warning(f"RabbitMQ: Error closing connection: {e}")
         

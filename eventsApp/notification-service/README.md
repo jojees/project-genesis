@@ -26,3 +26,17 @@
   "metadata": {},
   "raw_event_data": {}
 }
+
+### Command to clean and run the application while debugging
+find . -name "*.pyc" -delete ; rm -rf notification_service/__pycache__ ; python -m notification_service.main
+
+### Command to export requirements file.
+poetry export -f requirements.txt --output requirements.txt --without-hashes
+
+### Docker build and push commands
+docker build --no-cache -t jojees/notification-service:0.1.1 .
+docker push jojees/notification-service:0.1.1
+
+### Check url's from the notification service
+http://localhost:8000/alerts/4e0bec36-93a8-4e2e-aea9-97a95fa70c40
+http://localhost:8000/healthz
