@@ -27,7 +27,7 @@
 # notification_service/notification_service/api.py
 
 # from flask import Flask, jsonify
-from quart import Quart, jsonify
+from quart import Quart, jsonify, request
 # Import the PostgreSQLService, we'll need it to fetch data
 from notification_service.postgres_service import PostgreSQLService
 from .logger_config import logger
@@ -57,7 +57,39 @@ def register_api_routes(app: Quart, pg_service: PostgreSQLService):
                 logger.error("PostgreSQLService not initialized for API. Cannot fetch alerts.")
                 return jsonify({"error": "Service not ready to fetch alerts"}), 503
 
-            alerts_data = await pg_service.fetch_all_alerts()
+            # Get 'limit' and 'offset' from query parameters
+            # They will be strings, so convert them to int, or default to None
+            limit_str = request.args.get('limit')
+            offset_str = request.args.get('offset')
+
+            limit = None
+            if limit_str:
+                try:
+                    limit = int(limit_str)
+                    if limit <= 0:
+                        return jsonify({"error": "Limit must be a positive integer."}), 400
+                except ValueError:
+                    return jsonify({"error": "Limit must be an integer."}), 400
+
+            offset = None
+            if offset_str:
+                try:
+                    offset = int(offset_str)
+                    if offset < 0:
+                        return jsonify({"error": "Offset cannot be negative."}), 400
+                except ValueError:
+                    return jsonify({"error": "Offset must be an integer."}), 400
+
+            # Fetch alerts using the parsed limit and offset
+            # The fetch_all_alerts in postgres_service is already updated to handle None
+            alerts_data = await pg_service.fetch_all_alerts(limit=limit, offset=offset)
+            log_msg = f"Successfully fetched {len(alerts)} alerts via API"
+            if limit:
+                log_msg += f" (limit={limit})"
+            if offset:
+                log_msg += f" (offset={offset})"
+            pg_service.logger.info(log_msg + ".")
+
             return jsonify(alerts_data), 200
         except Exception as e:
             logger.error(f"Error fetching alerts via API: {e}", exc_info=True)

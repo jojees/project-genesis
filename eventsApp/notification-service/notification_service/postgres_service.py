@@ -227,7 +227,7 @@ class PostgreSQLService:
             logger.exception(f"PostgreSQL: Unexpected error inserting alert {alert_payload.get('alert_id')}: {e}")
             return False
 
-    async def fetch_all_alerts(self):
+    async def fetch_all_alerts(self, limit: int = None, offset: int = None):
         """Fetches all alerts from the database."""
         alerts = []
         if not self.pool:
@@ -251,6 +251,12 @@ class PostgreSQLService:
                         FROM alerts 
                         ORDER BY timestamp DESC
                     """)
+                    # Conditionally add LIMIT and OFFSET clauses
+                    if limit is not None and limit > 0:
+                        sql_query += f" LIMIT {limit}"
+                    if offset is not None and offset >= 0:
+                        sql_query += f" OFFSET {offset}"
+
                     rows = await acur.fetchall()
                     for row in rows:
                         # Convert UUIDs, datetimes & IP addresses to string for JSON serialization
