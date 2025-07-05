@@ -28,6 +28,28 @@ This document tracks pending actions and improvements for our services and Kuber
 * **Standardize Pod Naming Convention**: Investigate and implement a consistent naming convention for Kubernetes pods. Currently, pod names exhibit varying patterns, including random strings and multiple random strings (e.g., audit-event-generator-7f755ddfd5-xjw8t, postgres-0, rabbitmq-54657c4cf7-fn6l8). Establishing a clear and predictable naming standard will improve readability, debugging, and overall cluster management.
 * **Understand Kubernetes API Resources**: Explore and gain a deeper understanding of the various resource types available in Kubernetes, as listed by the kubectl api-resources command. This includes familiarizing oneself with their purpose, how they relate to each other, and their role in managing applications and infrastructure within the cluster.
 
+### Kubernetes YAML Validation & Linting
+
+- [ ] **Implement `yamllint` for general YAML syntax and style validation:**
+    - Install `yamllint` (`pip install yamllint` or `brew install yamllint`).
+    - Configure a `.yamllint.yml` file in the project root for desired rules and exclusions.
+    - Integrate `yamllint` into a Git pre-commit hook to automatically check `.yaml` and `.yml` files before every commit.
+
+- [ ] **Implement `kubeval` or `kubeconform` for Kubernetes schema validation:**
+    - Choose either `kubeval` or `kubeconform` (both are excellent, `kubeconform` is often slightly faster and supports more recent K8s versions out-of-the-box).
+    - Install the chosen tool (e.g., `brew install kubeval` or download binary for `kubeconform`).
+    - Integrate the chosen tool into a Git pre-commit hook to validate Kubernetes manifests (`k8s-deployment.yaml`, `k8s-service.yaml`, etc.) against official schemas.
+    - Consider specifying the target Kubernetes version for validation (e.g., `--kubernetes-version 1.28.0`).
+
+- [ ] **Establish `kubectl dry-run` as a manual pre-deployment check:**
+    - Document the use of `kubectl apply --dry-run=client -f <manifest.yaml>` for local syntax and basic validation.
+    - Document the use of `kubectl apply --dry-run=server -f <manifest.yaml>` for comprehensive server-side validation against the cluster's API.
+    - Add a note to the `README.md` or a development guide on when and how to use these commands.
+
+- [ ] **Update `.pre-commit-config.yaml`:**
+    - Add the configurations for `yamllint` and either `kubeval` or `kubeconform` to the `.pre-commit-config.yaml` file.
+    - Ensure `pre-commit install` is run after cloning the repo or modifying the config.
+
 ---
 
 ## Service Improvements & Fixes
