@@ -236,11 +236,7 @@ class PostgreSQLService:
         try:
             async with self.pool.connection() as conn: # Use self.pool here
                 async with conn.cursor(row_factory=awaitpsycopg.dict_row) as acur: # Use awaitpsycopg.dict_row
-                    # Select all columns defined in your table, or specific ones you need for the API
-                    # Make sure 'payload' is actually a column in your table.
-                    # If raw_event_data is the full payload, use that.
-                    # Adjust column names as per your CREATE TABLE statement.
-                    await acur.execute("""
+                    base_sql_query = """
                         SELECT 
                             alert_id, correlation_id, timestamp, received_at, alert_name, 
                             alert_type, severity, description, source_service_name, rule_id, 
@@ -250,12 +246,15 @@ class PostgreSQLService:
                             impacted_resource_details, metadata, raw_event_data 
                         FROM alerts 
                         ORDER BY timestamp DESC
-                    """)
-                    # Conditionally add LIMIT and OFFSET clauses
+                    """
+                    # Conditionally add LIMIT and OFFSET clauses directly to the query string
+                    full_sql_query = base_sql_query
                     if limit is not None and limit > 0:
-                        sql_query += f" LIMIT {limit}"
+                        full_sql_query += f" LIMIT {limit}"
                     if offset is not None and offset >= 0:
-                        sql_query += f" OFFSET {offset}"
+                        full_sql_query += f" OFFSET {offset}"
+
+                    await acur.execute(full_sql_query)
 
                     rows = await acur.fetchall()
                     for row in rows:

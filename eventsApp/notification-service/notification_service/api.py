@@ -83,12 +83,12 @@ def register_api_routes(app: Quart, pg_service: PostgreSQLService):
             # Fetch alerts using the parsed limit and offset
             # The fetch_all_alerts in postgres_service is already updated to handle None
             alerts_data = await pg_service.fetch_all_alerts(limit=limit, offset=offset)
-            log_msg = f"Successfully fetched {len(alerts)} alerts via API"
+            log_msg = f"Successfully fetched {len(alerts_data)} alerts via API"
             if limit:
                 log_msg += f" (limit={limit})"
             if offset:
                 log_msg += f" (offset={offset})"
-            pg_service.logger.info(log_msg + ".")
+            logger.info(log_msg + ".")
 
             return jsonify(alerts_data), 200
         except Exception as e:
