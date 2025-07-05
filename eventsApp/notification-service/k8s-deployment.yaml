@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: notification-service
-        image: jojees/notification-service:0.1.2
+        image: jojees/notification-service:0.1.6
         ports:
         - containerPort: 8000 # Matches the EXPOSE 8000 in your Dockerfile (for future API)
         env:
