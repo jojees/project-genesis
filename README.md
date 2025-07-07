@@ -59,7 +59,7 @@ The `AuditFlow Platform` is a conceptual multi-service application designed to g
 * **`rabbitmq`**: A message broker for inter-service communication.
 * **`redis`**: A key-value store for caching or temporary data.
 
-These services communicate primarily via **RabbitMQ**, enabling an event-driven architecture that showcases real-world microservice interaction patterns.
+These services communicate primarily via **RabbitMQ**, enabling an event-driven architecture that showcases real-world microservice interaction patterns. For further details about the application architecture, please refer to the [Architecture Documentation](docs/architecture.md).
 
 ---
 
