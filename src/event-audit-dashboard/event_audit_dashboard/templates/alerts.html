@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alert Details</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #0056b3; }
+        h2 { color: #0056b3; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 20px;}
+        .detail-item { margin-bottom: 10px; }
+        .detail-item strong { color: #555; display: inline-block; width: 150px; }
+        .json-viewer { background-color: #eee; border: 1px solid #ccc; padding: 10px; border-radius: 5px; white-space: pre-wrap; font-family: monospace; font-size: 0.9em; max-height: 400px; overflow-y: auto; }
+        .error { color: #dc3545; background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
+        .back-link { display: block; margin-top: 20px; text-align: right; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Alert Details</h1>
+
+        {% if error %}
+            <div class="error">
+                <strong>Error:</strong> {{ error }}
+            </div>
+        {% elif alert %}
+            <div class="alert-details">
+                <div class="detail-item"><strong>Alert ID:</strong> {{ alert.alert_id }}</div>
+                <div class="detail-item"><strong>Correlation ID:</strong> {{ alert.correlation_id }}</div>
+                <div class="detail-item"><strong>Alert Name:</strong> {{ alert.alert_name }}</div>
+                <div class="detail-item"><strong>Alert Type:</strong> {{ alert.alert_type }}</div>
+                <div class="detail-item"><strong>Severity:</strong> {{ alert.severity }}</div>
+                <div class="detail-item"><strong>Timestamp:</strong> {{ alert.timestamp }}</div>
+                <div class="detail-item"><strong>Received At:</strong> {{ alert.received_at }}</div>
+                <div class="detail-item"><strong>Description:</strong> {{ alert.description }}</div>
+                <div class="detail-item"><strong>Source Service:</strong> {{ alert.source_service_name }}</div>
+                <div class="detail-item"><strong>Action Observed:</strong> {{ alert.action_observed }}</div>
+
+                {% if alert.rule_id %}
+                <h2>Analysis Rule Details</h2>
+                <div class="detail-item"><strong>Rule ID:</strong> {{ alert.rule_id }}</div>
+                <div class="detail-item"><strong>Rule Name:</strong> {{ alert.rule_name }}</div>
+                <div class="json-viewer">{{ alert.analysis_rule_details | tojson(indent=2) }}</div>
+                {% endif %}
+
+                {% if alert.actor_id %}
+                <h2>Triggered By Details</h2>
+                <div class="detail-item"><strong>Actor Type:</strong> {{ alert.actor_type }}</div>
+                <div class="detail-item"><strong>Actor ID:</strong> {{ alert.actor_id }}</div>
+                <div class="detail-item"><strong>Client IP:</strong> {{ alert.client_ip }}</div>
+                <div class="json-viewer">{{ alert.triggered_by_details | tojson(indent=2) }}</div>
+                {% endif %}
+
+                {% if alert.resource_id %}
+                <h2>Impacted Resource Details</h2>
+                <div class="detail-item"><strong>Resource Type:</strong> {{ alert.resource_type }}</div>
+                <div class="detail-item"><strong>Resource ID:</strong> {{ alert.resource_id }}</div>
+                <div class="detail-item"><strong>Server Hostname:</strong> {{ alert.server_hostname }}</div>
+                <div class="json-viewer">{{ alert.impacted_resource_details | tojson(indent=2) }}</div>
+                {% endif %}
+
+                {% if alert.metadata %}
+                <h2>Metadata</h2>
+                <div class="json-viewer">{{ alert.metadata | tojson(indent=2) }}</div>
+                {% endif %}
+
+                {% if alert.raw_event_data %}
+                <h2>Raw Event Data</h2>
+                <div class="json-viewer">{{ alert.raw_event_data | tojson(indent=2) }}</div>
+                {% endif %}
+            </div>
+        {% else %}
+            <p>No alert details available.</p>
+        {% endif %}
+        <div class="back-link">
+            <a href="/">Back to Dashboard</a>
+        </div>
+    </div>
+</body>
+</html>

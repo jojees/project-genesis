@@ -28,6 +28,75 @@ This document tracks pending actions and improvements for our services and Kuber
 * **Standardize Pod Naming Convention**: Investigate and implement a consistent naming convention for Kubernetes pods. Currently, pod names exhibit varying patterns, including random strings and multiple random strings (e.g., audit-event-generator-7f755ddfd5-xjw8t, postgres-0, rabbitmq-54657c4cf7-fn6l8). Establishing a clear and predictable naming standard will improve readability, debugging, and overall cluster management.
 * **Understand Kubernetes API Resources**: Explore and gain a deeper understanding of the various resource types available in Kubernetes, as listed by the kubectl api-resources command. This includes familiarizing oneself with their purpose, how they relate to each other, and their role in managing applications and infrastructure within the cluster.
 
+* **Review and Manage Old Deployments and ReplicaSets**: Investigate the presence of old deployments and replicaSets when running `kubectl get all`. Understand if this retention is intentional (e.g., for rollback capabilities) or if these are stale resources.
+
+    ```
+    NAME                                          READY   STATUS    RESTARTS   AGE
+    pod/audit-event-generator-7f755ddfd5-xjw8t    1/1     Running   0          5d23h
+    pod/audit-log-analysis-586f479bd4-7tlzw       1/1     Running   0          3d21h
+    pod/event-audit-dashboard-795d667c8d-hjmsf    1/1     Running   0          6h8m
+    pod/notification-service-596b657cd5-dl7n7     1/1     Running   0          7h26m
+    pod/postgres-0                                1/1     Running   0          3d7h
+    pod/rabbitmq-54657c4cf7-fn6l8                 1/1     Running   0          6d
+    pod/redis-585676c7b5-g6stp                    1/1     Running   0          4d2h
+
+    NAME                                    TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)              AGE
+    service/audit-event-generator-service   ClusterIP   10.43.168.2     <none>        5000/TCP,8000/TCP    5d23h
+    service/audit-log-analysis-service      ClusterIP   10.43.249.7     <none>        5001/TCP,8001/TCP    5d6h
+    service/event-audit-dashboard-service   NodePort    10.43.27.13     <none>        80:30080/TCP         6h8m
+    service/kubernetes                      ClusterIP   10.43.0.1       <none>        443/TCP              6d1h
+    service/notification-service            ClusterIP   10.43.19.205    <none>        8000/TCP             22h
+    service/postgres-service                ClusterIP   100.10.158.118  <none>        5432/TCP             3d7h
+    service/rabbitmq-service                ClusterIP   10.43.51.149    <none>        5672/TCP,15672/TCP   6d
+    service/redis-service                   ClusterIP   10.43.160.249   <none>        6379/TCP             4d2h
+
+    NAME                                                READY   UP-TO-DATE   AVAILABLE   AGE
+    deployment.apps/audit-event-generator               1/1     1            1           5d23h
+    deployment.apps/audit-log-analysis                  1/1     1            1           5d6h
+    deployment.apps/event-audit-dashboard               1/1     1            1           6h8m
+    deployment.apps/notification-service                1/1     1            1           28h
+    deployment.apps/notification-service-deployment     0/0     0            0           2d7h
+    deployment.apps/rabbitmq                            1/1     1            1           6d
+    deployment.apps/redis                               1/1     1            1           4d2h
+
+    NAME                                                          DESIRED   CURRENT   READY   AGE
+    replicaset.apps/audit-event-generator-766d9c7878              0         0         0       5d23h
+    replicaset.apps/audit-event-generator-7f755ddfd5              1         1         1       5d23h
+    replicaset.apps/audit-log-analysis-576994b994                 0         0         0       3d21h
+    replicaset.apps/audit-log-analysis-586f479bd4                 1         1         1       3d21h
+    replicaset.apps/audit-log-analysis-5df599d85c                 0         0         0       3d21h
+    replicaset.apps/audit-log-analysis-6558999587                 0         0         0       4d
+    replicaset.apps/audit-log-analysis-68ccd4f645                 0         0         0       4d
+    replicaset.apps/audit-log-analysis-76cd5fcc9c                 0         0         0       4d1h
+    replicaset.apps/audit-log-analysis-7f49df8946                 0         0         0       4d
+    replicaset.apps/audit-log-analysis-85c8697984                 0         0         0       3d23h
+    replicaset.apps/audit-log-analysis-b488ccd88                  0         0         0       4d1h
+    replicaset.apps/audit-log-analysis-b6d985899                  0         0         0       3d22h
+    replicaset.apps/audit-log-analysis-b9f46fcfc                  0         0         0       3d23h
+    replicaset.apps/event-audit-dashboard-795d667c8d              1         1         1       6h8m
+    replicaset.apps/notification-service-596b657cd5               1         1         1       7h26m
+    replicaset.apps/notification-service-5dd4db8bdc               0         0         0       22h
+    replicaset.apps/notification-service-657cbc49bf               0         0         0       22h
+    replicaset.apps/notification-service-6dfb95f56c               0         0         0       7h33m
+    replicaset.apps/notification-service-75f44f75dd               0         0         0       7h29m
+    replicaset.apps/notification-service-846f459fc8               0         0         0       7h51m
+    replicaset.apps/notification-service-9544d7554                0         0         0       23h
+    replicaset.apps/notification-service-cdbd4994c                0         0         0       28h
+    replicaset.apps/notification-service-deployment-6d58cb4f54    0         0         0       2d7h
+    replicaset.apps/notification-service-deployment-757c66f46     0         0         0       2d6h
+    replicaset.apps/notification-service-deployment-8694b7647     0         0         0       2d7h
+    replicaset.apps/notification-service-deployment-cdbd4994c     0         0         0       28h
+    replicaset.apps/rabbitmq-54657c4cf7                           1         1         1       6d
+    replicaset.apps/redis-585676c7b5                              1         1         1       4d2h
+
+    NAME                          READY   AGE
+    statefulset.apps/postgres     1/1     3d7h
+    ```
+
+    If not needed, research and implement automated cleanup strategies for old deployments and replicaSets (e.g., configuring `revisionHistoryLimit` in Deployments, or using custom scripts/operators to remove resources older than 'X' days). Understand the purpose of keeping old records (e.g., for rollbacks) and determine an appropriate retention policy.
+
+---
+
 ### Kubernetes YAML Validation & Linting
 
 - [ ] **Implement `yamllint` for general YAML syntax and style validation:**
@@ -115,3 +184,4 @@ This document tracks pending actions and improvements for our services and Kuber
     ```
 
     Logs should follow a clear, consistent structure (e.g., JSON or a well-defined plain text format) for better integration with logging tools and easier debugging.
+* **Automate Artifact Building and Storage with GitHub Actions and Azure Artifacts**: Implement a CI/CD pipeline using GitHub Actions to automatically build application artifacts. Configure the pipeline to then store these generated artifacts in Azure Artifacts for centralized storage, versioning, and easy consumption by other services or deployment processes. This will streamline the build and release process and ensure a reliable source for deployable components.

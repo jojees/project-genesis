@@ -1,0 +1,19 @@
+# eventsApp/event-audit-dashboard/k8s-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: event-audit-dashboard-service
+  labels:
+    app: event-audit-dashboard
+spec:
+  selector:
+    app: event-audit-dashboard
+  ports:
+    - protocol: TCP
+      port: 80         # The port the Kubernetes Service itself will listen on (standard HTTP port)
+      targetPort: 8080 # The port on the pod that the service should send traffic to
+      nodePort: 30080  # Assign a specific NodePort in the 30000-32767 range. Choose one that's not in use.
+      name: http-dashboard
+  type: NodePort       # Use NodePort to expose the service on each node's IP at a static port
+                       # If you have a LoadBalancer provider (e.g., MetalLB for K3s on bare metal),
+                       # you could change this to type: LoadBalancer for easier external access.

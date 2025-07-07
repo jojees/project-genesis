@@ -1,0 +1,38 @@
+# eventsApp/event-audit-dashboard/k8s-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: event-audit-dashboard
+  labels:
+    app: event-audit-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: event-audit-dashboard
+  template:
+    metadata:
+      labels:
+        app: event-audit-dashboard
+    spec:
+      containers:
+      - name: event-audit-dashboard
+        image: jojees/event-audit-dashboard:v1.0.2
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        env:
+
+        - name: NOTIFICATION_SERVICE_HOST
+          value: notification-service
+        - name: NOTIFICATION_SERVICE_PORT
+          value: "8000"
+        
+        # Optional: Add resource requests/limits for production deployments
+        # resources:
+        #   requests:
+        #     memory: "128Mi"
+        #     cpu: "100m"
+        #   limits:
+        #     memory: "256Mi"
+        #     cpu: "200m"
