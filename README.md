@@ -193,7 +193,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contact
 
-* **Author:** Joji Vithyathil Johny
+* **Author:** Joji Vithayathil Johny
 * **Email:** joji@jojees.net
 * **GitHub Repository:** [https://github.com/jojees/project-genesis](https://github.com/jojees/project-genesis)
 
