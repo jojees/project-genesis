@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - stage
+      - staging
 
 env:
   DOCKER_ORG: jojees
