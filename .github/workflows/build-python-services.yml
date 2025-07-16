@@ -28,13 +28,13 @@ jobs:
         with:
           filters: |
             event-audit-dashboard:
-              - 'event-audit-dashboard/**'
+              - 'src/event-audit-dashboard/**'
             notification-service:
-              - 'notification-service/**'
+              - 'src/notification-service/**'
             audit-log-analysis:
-              - 'audit-log-analysis/**'
+              - 'src/audit-log-analysis/**'
             audit-event-generator:
-              - 'audit-event-generator/**'
+              - 'src/audit-event-generator/**'
 
   # 2. Reusable workflow to build and push a single Docker image
   # This makes the main workflow cleaner and reduces repetition.
