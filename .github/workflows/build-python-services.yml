@@ -7,8 +7,8 @@ on:
       - staging
 
 env:
-  DOCKER_ORG: jojees
-  DOCKER_REPO_PREFIX: ""
+  GLOBAL_DOCKER_ORG: jojees
+  GLOBAL_DOCKER_REPO_PREFIX: ""
 
 jobs:
   # 1. Job to detect which application directories have changed
@@ -58,6 +58,9 @@ jobs:
   #   name: Build & Push event-audit-dashboard
   #   needs: filter_changes # Depends on filter_changes to get outputs
   #   if: needs.filter_changes.outputs.event_audit_dashboard_changes == 'true' # Only run if changes detected
+    # env:
+    #   DOCKER_ORG: ${{ env.GLOBAL_DOCKER_ORG }}
+    #   DOCKER_REPO_PREFIX: ${{ env.GLOBAL_DOCKER_REPO_PREFIX }}
   #   uses: ./.github/workflows/build-single-service.yml # Call the reusable workflow
   #   with:
   #     service_name: event-audit-dashboard
@@ -73,6 +76,9 @@ jobs:
   #   name: Build & Push notification-service
   #   needs: filter_changes
   #   if: needs.filter_changes.outputs.notification_service_changes == 'true'
+    # env:
+    #   DOCKER_ORG: ${{ env.GLOBAL_DOCKER_ORG }}
+    #   DOCKER_REPO_PREFIX: ${{ env.GLOBAL_DOCKER_REPO_PREFIX }}
   #   uses: ./.github/workflows/build-single-service.yml
   #   with:
   #     service_name: notification-service
@@ -88,6 +94,9 @@ jobs:
   #   name: Build & Push audit-log-analysis
   #   needs: filter_changes
   #   if: needs.filter_changes.outputs.audit_log_analysis_changes == 'true'
+    # env:
+    #   DOCKER_ORG: ${{ env.GLOBAL_DOCKER_ORG }}
+    #   DOCKER_REPO_PREFIX: ${{ env.GLOBAL_DOCKER_REPO_PREFIX }}
   #   uses: ./.github/workflows/build-single-service.yml
   #   with:
   #     service_name: audit-log-analysis
@@ -103,6 +112,9 @@ jobs:
     name: Build & Push audit-event-generator
     needs: filter_changes
     if: needs.filter_changes.outputs.audit_event_generator_changes == 'true'
+    env:
+      DOCKER_ORG: ${{ env.GLOBAL_DOCKER_ORG }}
+      DOCKER_REPO_PREFIX: ${{ env.GLOBAL_DOCKER_REPO_PREFIX }}
     uses: ./.github/workflows/build-single-service.yml
     with:
       service_name: audit-event-generator
