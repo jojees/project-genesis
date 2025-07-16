@@ -43,8 +43,8 @@ jobs:
   #   uses: ./.github/workflows/build-single-service.yml # Path to the reusable workflow file
   #   with:
   #     service_name: ${{ github.event.inputs.service_name }} # Input: name of the service (e.g., 'event-audit-dashboard')
-  #     docker_org: ${{ env.DOCKER_ORG }} # Input: Docker Hub organization/username
-  #     docker_repo_prefix: ${{ env.DOCKER_REPO_PREFIX }} # Input: common repo prefix (empty in your case)
+  #     docker_org: ${{ DOCKER_ORG }} # Input: Docker Hub organization/username
+  #     docker_repo_prefix: ${{ DOCKER_REPO_PREFIX }} # Input: common repo prefix (empty in your case)
   #     ref_name: ${{ github.ref_name }} # Input: current branch name (e.g., 'main', 'stage', 'dev')
   #     github_sha: ${{ github.sha }} # Input: commit SHA for tagging
   #   secrets:
@@ -61,8 +61,8 @@ jobs:
   #   uses: ./.github/workflows/build-single-service.yml # Call the reusable workflow
   #   with:
   #     service_name: event-audit-dashboard
-  #     docker_org: ${{ env.DOCKER_ORG }}
-  #     docker_repo_prefix: ${{ env.DOCKER_REPO_PREFIX }}
+  #     docker_org: ${{ DOCKER_ORG }}
+  #     docker_repo_prefix: ${{ DOCKER_REPO_PREFIX }}
   #     ref_name: ${{ github.ref_name }}
   #     github_sha: ${{ github.sha }}
   #   secrets:
@@ -76,8 +76,8 @@ jobs:
   #   uses: ./.github/workflows/build-single-service.yml
   #   with:
   #     service_name: notification-service
-  #     docker_org: ${{ env.DOCKER_ORG }}
-  #     docker_repo_prefix: ${{ env.DOCKER_REPO_PREFIX }}
+  #     docker_org: ${{ DOCKER_ORG }}
+  #     docker_repo_prefix: ${{ DOCKER_REPO_PREFIX }}
   #     ref_name: ${{ github.ref_name }}
   #     github_sha: ${{ github.sha }}
   #   secrets:
@@ -91,8 +91,8 @@ jobs:
   #   uses: ./.github/workflows/build-single-service.yml
   #   with:
   #     service_name: audit-log-analysis
-  #     docker_org: ${{ env.DOCKER_ORG }}
-  #     docker_repo_prefix: ${{ env.DOCKER_REPO_PREFIX }}
+  #     docker_org: ${{ DOCKER_ORG }}
+  #     docker_repo_prefix: ${{ DOCKER_REPO_PREFIX }}
   #     ref_name: ${{ github.ref_name }}
   #     github_sha: ${{ github.sha }}
   #   secrets:
@@ -106,8 +106,8 @@ jobs:
     uses: ./.github/workflows/build-single-service.yml
     with:
       service_name: audit-event-generator
-      docker_org: ${{ env.DOCKER_ORG }}
-      docker_repo_prefix: ${{ env.DOCKER_REPO_PREFIX }}
+      docker_org: ${{ DOCKER_ORG }}
+      docker_repo_prefix: ${{ DOCKER_REPO_PREFIX }}
       ref_name: ${{ github.ref_name }}
       github_sha: ${{ github.sha }}
     secrets:
