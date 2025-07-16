@@ -51,7 +51,7 @@ jobs:
       - name: Determine Docker Image Tags
         id: docker_meta
         run: |
-          IMAGE_NAME="${{ inputs.docker_org }}/${{ inputs.service_name }}" # Construct full image name
+          IMAGE_NAME="${{ inputs.docker_org }}/${{ inputs.docker_repo_prefix }}${{ inputs.service_name }}" # Construct full image name
           TAGS="${IMAGE_NAME}:${{ inputs.github_sha }}" # Always include commit SHA
 
           # Get the lowercase branch name for tagging
