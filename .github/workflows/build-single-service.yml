@@ -73,7 +73,7 @@ jobs:
       - name: Build and push Docker image for ${{ inputs.service_name }}
         uses: docker/build-push-action@v5
         with:
-          context: ${{ inputs.service_name }} # Path to the service's Dockerfile context
+          context: src/${{ inputs.service_name }} # Path to the service's Dockerfile context
           platforms: linux/amd64,linux/arm64 # Architectures to build for
           push: true # Push the built image to Docker Hub
           tags: ${{ steps.docker_meta.outputs.TAGS }} # Use the tags determined above
