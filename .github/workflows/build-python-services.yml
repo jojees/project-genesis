@@ -6,9 +6,9 @@ on:
       - main
       - staging
 
-env:
-  GLOBAL_DOCKER_ORG: jojees
-  GLOBAL_DOCKER_REPO_PREFIX: ""
+# env:
+#   GLOBAL_DOCKER_ORG: jojees
+#   GLOBAL_DOCKER_REPO_PREFIX: ""
 
 jobs:
   # 1. Job to detect which application directories have changed
@@ -112,14 +112,14 @@ jobs:
     name: Build & Push audit-event-generator
     needs: filter_changes
     if: needs.filter_changes.outputs.audit_event_generator_changes == 'true'
-    env:
-      DOCKER_ORG: ${{ env.GLOBAL_DOCKER_ORG }}
-      DOCKER_REPO_PREFIX: ${{ env.GLOBAL_DOCKER_REPO_PREFIX }}
+    # env:
+    #   DOCKER_ORG: ${{ env.GLOBAL_DOCKER_ORG }}
+    #   DOCKER_REPO_PREFIX: ${{ env.GLOBAL_DOCKER_REPO_PREFIX }}
     uses: ./.github/workflows/build-single-service.yml
     with:
       service_name: audit-event-generator
-      docker_org: ${{ env.GLOBAL_DOCKER_ORG }}
-      docker_repo_prefix: ${{ env.GLOBAL_DOCKER_REPO_PREFIX }}
+      docker_org: ${{ github.repository_owner }}
+      docker_repo_prefix: ""
       ref_name: ${{ github.ref_name }}
       github_sha: ${{ github.sha }}
     secrets:
