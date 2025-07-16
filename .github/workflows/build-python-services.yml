@@ -118,8 +118,8 @@ jobs:
     uses: ./.github/workflows/build-single-service.yml
     with:
       service_name: audit-event-generator
-      docker_org: ${{ DOCKER_ORG }}
-      docker_repo_prefix: ${{ DOCKER_REPO_PREFIX }}
+      docker_org: ${{ env.GLOBAL_DOCKER_ORG }}
+      docker_repo_prefix: ${{ env.GLOBAL_DOCKER_REPO_PREFIX }}
       ref_name: ${{ github.ref_name }}
       github_sha: ${{ github.sha }}
     secrets:
