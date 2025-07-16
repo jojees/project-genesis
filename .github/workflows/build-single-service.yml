@@ -1,0 +1,81 @@
+name: Reusable Docker Build and Push
+
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        description: 'The name of the service (e.g., event-audit-dashboard)'
+        required: true
+        type: string
+      docker_org:
+        description: 'Docker Hub username or organization'
+        required: true
+        type: string
+      docker_repo_prefix:
+        description: 'Common prefix for Docker image names'
+        required: true
+        type: string
+      ref_name:
+        description: 'The name of the branch that triggered the workflow (e.g., main, stage, dev)'
+        required: true
+        type: string
+      github_sha:
+        description: 'The commit SHA for tagging'
+        required: true
+        type: string
+    secrets:
+      DOCKER_USERNAME:
+        required: true
+      DOCKER_PASSWORD:
+        required: true
+
+jobs:
+  build-service:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Determine Docker Image Tags
+        id: docker_meta
+        run: |
+          IMAGE_NAME="${{ inputs.docker_org }}/${{ inputs.service_name }}" # Construct full image name
+          TAGS="${IMAGE_NAME}:${{ inputs.github_sha }}" # Always include commit SHA
+
+          # Get the lowercase branch name for tagging
+          BRANCH_TAG=$(echo "${{ inputs.ref_name }}" | tr '[:upper:]' '[:lower:]')
+
+          # Add branch-specific tags
+          if [[ "${{ inputs.ref_name }}" == "main" ]]; then
+            TAGS="${TAGS},${IMAGE_NAME}:latest"
+          else
+            # For any non-main branch (stage, dev, or any feature branch)
+            TAGS="${TAGS},${IMAGE_NAME}:${BRANCH_TAG},${IMAGE_NAME}:${BRANCH_TAG}-snapshot"
+          fi
+
+          echo "Calculated IMAGE_NAME: $IMAGE_NAME"
+          echo "Calculated TAGS: $TAGS"
+          echo "TAGS=$TAGS" >> $GITHUB_OUTPUT # Set TAGS as an output for subsequent steps
+        shell: bash
+
+      - name: Build and push Docker image for ${{ inputs.service_name }}
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ inputs.service_name }} # Path to the service's Dockerfile context
+          platforms: linux/amd64,linux/arm64 # Architectures to build for
+          push: true # Push the built image to Docker Hub
+          tags: ${{ steps.docker_meta.outputs.TAGS }} # Use the tags determined above
+          cache-from: type=gha # Enable GitHub Actions cache for build layers
+          cache-to: type=gha,mode=max # Store cache for future builds

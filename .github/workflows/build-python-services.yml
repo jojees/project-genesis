@@ -1,0 +1,115 @@
+name: "CI: Optimized Multi-arch Docker Builds for Python Services"
+
+on:
+  push:
+    branches:
+      - main
+      - stage
+
+env:
+  DOCKER_ORG: jojees
+  DOCKER_REPO_PREFIX: ""
+
+jobs:
+  # 1. Job to detect which application directories have changed
+  filter_changes:
+    runs-on: ubuntu-latest
+    outputs:
+      # Outputs for each service, indicating if its directory or common configs changed
+      event_audit_dashboard_changes: ${{ steps.changes.outputs.event-audit-dashboard }}
+      notification_service_changes: ${{ steps.changes.outputs.notification-service }}
+      audit_log_analysis_changes: ${{ steps.changes.outputs.audit-log-analysis }}
+      audit_event_generator_changes: ${{ steps.changes.outputs.audit-event-generator }}
+    steps:
+      - uses: actions/checkout@v4 # Checkout the repository to analyze changes
+      - name: Check for changes in service directories
+        id: changes
+        uses: dorny/paths-filter@v3 # Use the paths-filter action
+        with:
+          filters: |
+            event-audit-dashboard:
+              - 'event-audit-dashboard/**'
+            notification-service:
+              - 'notification-service/**'
+            audit-log-analysis:
+              - 'audit-log-analysis/**'
+            audit-event-generator:
+              - 'audit-event-generator/**'
+
+  # 2. Reusable workflow to build and push a single Docker image
+  # This makes the main workflow cleaner and reduces repetition.
+  # build_and_push_service:
+  #   needs: filter_changes # This reusable workflow job depends on the filter_changes job
+  #   uses: ./.github/workflows/build-single-service.yml # Path to the reusable workflow file
+  #   with:
+  #     service_name: ${{ github.event.inputs.service_name }} # Input: name of the service (e.g., 'event-audit-dashboard')
+  #     docker_org: ${{ env.DOCKER_ORG }} # Input: Docker Hub organization/username
+  #     docker_repo_prefix: ${{ env.DOCKER_REPO_PREFIX }} # Input: common repo prefix (empty in your case)
+  #     ref_name: ${{ github.ref_name }} # Input: current branch name (e.g., 'main', 'stage', 'dev')
+  #     github_sha: ${{ github.sha }} # Input: commit SHA for tagging
+  #   secrets:
+  #     DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }} # Pass Docker secrets
+  #     DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
+  # # 3. Individual jobs for each application, conditionally triggered
+  # #    These jobs will call the reusable workflow if changes are detected.
+
+  # build-event-audit-dashboard:
+  #   name: Build & Push event-audit-dashboard
+  #   needs: filter_changes # Depends on filter_changes to get outputs
+  #   if: needs.filter_changes.outputs.event_audit_dashboard_changes == 'true' # Only run if changes detected
+  #   uses: ./.github/workflows/build-single-service.yml # Call the reusable workflow
+  #   with:
+  #     service_name: event-audit-dashboard
+  #     docker_org: ${{ env.DOCKER_ORG }}
+  #     docker_repo_prefix: ${{ env.DOCKER_REPO_PREFIX }}
+  #     ref_name: ${{ github.ref_name }}
+  #     github_sha: ${{ github.sha }}
+  #   secrets:
+  #     DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  #     DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
+  # build-notification-service:
+  #   name: Build & Push notification-service
+  #   needs: filter_changes
+  #   if: needs.filter_changes.outputs.notification_service_changes == 'true'
+  #   uses: ./.github/workflows/build-single-service.yml
+  #   with:
+  #     service_name: notification-service
+  #     docker_org: ${{ env.DOCKER_ORG }}
+  #     docker_repo_prefix: ${{ env.DOCKER_REPO_PREFIX }}
+  #     ref_name: ${{ github.ref_name }}
+  #     github_sha: ${{ github.sha }}
+  #   secrets:
+  #     DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  #     DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
+  # build-audit-log-analysis:
+  #   name: Build & Push audit-log-analysis
+  #   needs: filter_changes
+  #   if: needs.filter_changes.outputs.audit_log_analysis_changes == 'true'
+  #   uses: ./.github/workflows/build-single-service.yml
+  #   with:
+  #     service_name: audit-log-analysis
+  #     docker_org: ${{ env.DOCKER_ORG }}
+  #     docker_repo_prefix: ${{ env.DOCKER_REPO_PREFIX }}
+  #     ref_name: ${{ github.ref_name }}
+  #     github_sha: ${{ github.sha }}
+  #   secrets:
+  #     DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  #     DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
+  build-audit-event-generator:
+    name: Build & Push audit-event-generator
+    needs: filter_changes
+    if: needs.filter_changes.outputs.audit_event_generator_changes == 'true'
+    uses: ./.github/workflows/build-single-service.yml
+    with:
+      service_name: audit-event-generator
+      docker_org: ${{ env.DOCKER_ORG }}
+      docker_repo_prefix: ${{ env.DOCKER_REPO_PREFIX }}
+      ref_name: ${{ github.ref_name }}
+      github_sha: ${{ github.sha }}
+    secrets:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
