@@ -54,6 +54,8 @@ jobs:
     needs: filter_changes
     if: needs.filter_changes.outputs.event_audit_dashboard_changes == 'true' # Only run if changes detected
     uses: ./.github/workflows/build-single-service.yml
+    permissions:
+      security-events: write
     with:
       service_name: event-audit-dashboard
       docker_org: ${{ github.repository_owner }}
@@ -69,6 +71,8 @@ jobs:
     needs: filter_changes
     if: needs.filter_changes.outputs.notification_service_changes == 'true'
     uses: ./.github/workflows/build-single-service.yml
+    permissions:
+      security-events: write
     with:
       service_name: notification-service
       docker_org: ${{ github.repository_owner }}
@@ -84,6 +88,8 @@ jobs:
     needs: filter_changes
     if: needs.filter_changes.outputs.audit_log_analysis_changes == 'true'
     uses: ./.github/workflows/build-single-service.yml
+    permissions:
+      security-events: write
     with:
       service_name: audit-log-analysis
       docker_org: ${{ github.repository_owner }}
@@ -99,6 +105,8 @@ jobs:
     needs: filter_changes
     if: needs.filter_changes.outputs.audit_event_generator_changes == 'true'
     uses: ./.github/workflows/build-single-service.yml
+    permissions:
+      security-events: write
     with:
       service_name: audit-event-generator
       docker_org: ${{ github.repository_owner }}
