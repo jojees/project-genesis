@@ -32,9 +32,31 @@ on:
 jobs:
   build-service:
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up Python for Bandit
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Bandit
+        run: pip install bandit bandit-sarif-formatter
+
+      - name: Run Bandit Security Scan for ${{ inputs.service_name }}
+        run: |
+          cd src/${{ inputs.service_name }}
+          bandit -r . -ll -f sarif -o bandit_results.sarif || true
+
+      - name: Upload Bandit SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: src/${{ inputs.service_name }}/bandit_results.sarif
+          wait-for-processing: true
+          category: ${{ inputs.service_name }}-bandit
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3

@@ -269,3 +269,7 @@ Thumbs.db # Windows
 # Database files
 *.sqlite3
 *.db
+
+# Bandit scan results
+**/bandit_results.sarif
+**/bandit_results.json
