@@ -195,3 +195,33 @@ This document tracks pending actions and improvements for our services and Kuber
 ## General Project Management
 
 * **Create GitHub Issues for all `TODO.md` entries**: Go through the `TODO.md` file and create a dedicated GitHub Issue for each individual activity or enhancement listed. Assign appropriate labels (e.g., `enhancement`, `bug`, `documentation`, `devsecops`), assignees, and project board associations to each issue. This will allow for better tracking, prioritization, and collaboration on all pending tasks.
+
+### DevSecOps Enhancements
+
+* **Enforce Security Gates Gradually:**
+    * **Introduce `exit-code: 1` Strategically:** Once initial findings are managed, gradually re-enable `exit-code: 1` for Trivy (dependency and image scans) and/or Bandit scans. Start with higher severities (e.g., CRITICAL, then HIGH) to prevent new critical vulnerabilities from entering production.
+    * **Implement Trivy Ignore Policies:** Explore using `trivy --ignore-policy /path/to/policy.yaml` or `.trivyignore` files to manage acceptable risks and suppress specific findings without globally ignoring severities.
+    * **Configure Branch Protection Rules:** Implement branch protection rules on `main` and `staging` branches to require successful completion of the security jobs before merging pull requests.
+
+* **Deeper SCA Scan Configuration and Tuning:**
+    * **Utilize Trivy Baselines:** Learn how to use Trivy's baselines to "acknowledge" existing vulnerabilities (e.g., in base images) and focus on new findings.
+    * **Generate SBOM for Images:** Add a step to generate Software Bill of Materials (SBOM) for each built image (e.g., in SPDX format) using Trivy and upload them as workflow artifacts for enhanced supply chain visibility.
+    * **Explore Trivy Custom Checks:** Investigate advanced Trivy custom checks for highly specific security requirements.
+
+* **Integrated Secret Scanning (Beyond Trivy's Basic):**
+    * **Dedicated Secret Scanning Tools:** Consider integrating more robust dedicated secret scanning tools (e.g., `detect-secrets`, GitGuardian) into separate CI jobs or as Git pre-commit hooks to prevent secrets from being committed.
+
+* **Runtime Security and Observability:**
+    * **Container Runtime Security:** Explore tools like Falco or Tracee for monitoring container behavior and detecting suspicious activity post-deployment.
+    * **Enhanced Security Logging:** Ensure applications log security-relevant events and integrate with a centralized SIEM (Security Information and Event Management) or a robust monitoring solution.
+
+* **Supply Chain Security Best Practices (SLSA):**
+    * **Generate Build Provenance:** Research generating build provenance for images to attest to their build process and origin.
+    * **Implement Image Signing:** Sign Docker images using tools like Notation to ensure integrity and authenticity of deployed images, allowing consumers to verify them.
+
+* **Automation for Remediation/Reporting:**
+    * **Automate GitHub Issue Creation from Code Scanning Alerts:** Implement a GitHub Actions workflow to automatically create GitHub Issues for new Code Scanning alerts (e.g., parsing SARIF files for high-severity findings and creating issues via the GitHub API).
+    * **Define Policy-as-Code:** Define security policies in code (e.g., OPA Gatekeeper for Kubernetes) for consistent enforcement across your environment.
+
+* **Container Registry Integration (GHCR):**
+    * **Complete GHCR Integration:** Ensure all services are consistently building and pushing Docker images to **both Docker Hub and GitHub Container Registry (GHCR)**. Verify images appear in the Packages section of the GitHub repository. (Note: Initial setup is in place, this is for ongoing verification and full adoption across services if not already universal).
