@@ -56,11 +56,12 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
-          path: 'src/${{ inputs.service_name }}'
+          scan-ref: 'src/${{ inputs.service_name }}'
           format: 'sarif'
           output: 'trivy-dependency-results_${{ inputs.service_name }}.sarif'
           scanners: 'vuln,secret'
           exit-code: '0' # Set to 0 to not fail the build for now
+          include-dev-deps: true
           # Removed severity and ignore-unfixed to capture all results
 
       # Upload Bandit SARIF results
@@ -139,10 +140,10 @@ jobs:
       - name: Run Trivy Image Scan for ${{ inputs.service_name }}
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: "${{ steps.docker_meta.outputs.TAGS }}"
+          image-ref: "${{ inputs.docker_org }}/${{ inputs.docker_repo_prefix }}${{ inputs.service_name }}:${{ inputs.github_sha }}"
           format: 'sarif'
           output: 'trivy-image-results_${{ inputs.service_name }}.sarif'
-          scanners: 'vuln,secret,config'
+          scanners: 'vuln,secret,misconfig'
           exit-code: '0'
           # ignore-unfixed: true
           # severity: 'HIGH,CRITICAL'
