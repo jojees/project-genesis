@@ -185,3 +185,13 @@ This document tracks pending actions and improvements for our services and Kuber
 
     Logs should follow a clear, consistent structure (e.g., JSON or a well-defined plain text format) for better integration with logging tools and easier debugging.
 * **Automate Artifact Building and Storage with GitHub Actions and Azure Artifacts**: Implement a CI/CD pipeline using GitHub Actions to automatically build application artifacts. Configure the pipeline to then store these generated artifacts in Azure Artifacts for centralized storage, versioning, and easy consumption by other services or deployment processes. This will streamline the build and release process and ensure a reliable source for deployable components.
+
+## CI/CD & DevSecOps Enhancements
+
+* **Automate GitHub Issue Creation from Code Scanning Alerts**: Implement a GitHub Actions workflow (`.github/workflows/create-sast-issues.yml`) to automatically create GitHub Issues for new Code Scanning alerts (e.g., Bandit findings). This workflow should trigger on `code_scanning_alert` events, extract relevant alert details (tool, rule, severity, location), and create a new issue with appropriate labels (e.g., `security`, `sast`, `high`). Grant the workflow `issues: write` permissions.
+* **Extend SAST Scans to Feature Branches**: Configure GitHub Actions workflows to perform SAST scans (using Bandit) on all feature branches when Python application code (`src/**.py`) is modified. This will "shift left" security feedback, allowing developers to identify and remediate issues before opening Pull Requests to `staging`. Ensure the reusable workflow `build-single-service.yml` is called from the feature branch CI for this purpose.
+* **Implement Auto-Merge from Feature to Dev Branch**: Set up a GitHub Actions workflow and/or branch protection rules to automatically merge feature branches into the `dev` branch if all required CI checks (build, tests, and potentially SAST/linting if made blocking) succeed. This streamlines the integration process for development cycles.
+
+## General Project Management
+
+* **Create GitHub Issues for all `TODO.md` entries**: Go through the `TODO.md` file and create a dedicated GitHub Issue for each individual activity or enhancement listed. Assign appropriate labels (e.g., `enhancement`, `bug`, `documentation`, `devsecops`), assignees, and project board associations to each issue. This will allow for better tracking, prioritization, and collaboration on all pending tasks.
