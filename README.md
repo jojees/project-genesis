@@ -3,6 +3,7 @@
 [![CI/CD Status](https://github.com/jojees/project-genesis/actions/workflows/k8s-deploy.yaml/badge.svg)](https://github.com/jojees/project-genesis/actions/workflows/k8s-deploy.yaml)
 --->
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Code Scanning status](https://github.com/jojees/project-genesis/actions/workflows/build-python-services.yml/badge.svg)](https://github.com/jojees/project-genesis/security/code-scanning)
 
 ---
 
@@ -42,7 +43,7 @@ This project aims to provide a practical foundation for aspiring and current Dev
 * **Managing Kubernetes resources** effectively using Helm and Kustomize.
 * **Integrating testing and code quality** into the development workflow.
 * **Establishing observability** for monitoring application health and performance.
-* **Understanding and applying DevSecOps principles** for secure software delivery.
+* **Understanding and applying DevSecOps principles**, specifically gaining hands-on experience with **Static Application Security Testing (SAST)** and integrating security analysis directly into CI/CD pipelines.
 * **Exploring FinDevOps concepts** for cost-effective cloud-native operations.
 
 ---
@@ -174,8 +175,20 @@ To get **Project Genesis** up and running, follow these high-level steps. Detail
 
 * **DevOps:** Full automation from code commit to deployment, fostering collaboration and rapid feedback cycles for the `AuditFlow Platform`.
 * **Site Reliability Engineering (SRE):** Focus on observability (Prometheus, Grafana), defining SLOs/SLAs, and building resilient, self-healing systems for the `AuditFlow Platform`.
-* **DevSecOps:** Integration of security best practices throughout the SDLC, including static code analysis, vulnerability scanning of Docker images, and secure Kubernetes configurations for the `AuditFlow Platform`.
+* **DevSecOps:** Integration of security best practices throughout the SDLC, including **automated Static Application Security Testing (SAST) with Bandit for Python services**, vulnerability scanning of Docker images, and secure Kubernetes configurations for the `AuditFlow Platform`.
 * **FinDevOps:** Awareness and implementation of cost-efficient strategies in cloud-native environments, such as resource optimization, effective scaling, and cost monitoring of the `AuditFlow Platform` and its underlying infrastructure.
+
+### Security Overview (DevSecOps)
+
+Project Genesis incorporates several security best practices:
+
+* **Static Application Security Testing (SAST):** Python services are scanned using [Bandit](https://bandit.readthedocs.io/) during the CI/CD pipeline. Findings are automatically uploaded to GitHub Code Scanning.
+    * **Scan Tool:** Bandit
+    * **Output Format:** SARIF
+    * **Integration Point:** GitHub Actions (`.github/workflows/build-single-service.yml`)
+    * **View Results:** Check the [Code scanning alerts](https://github.com/jojees/project-genesis/security/code-scanning) in the GitHub repository's Security tab.
+* **Vulnerability Scanning (Future):** Placeholder for future container image scanning.
+* **Secure Configuration:** Placeholder for Kubernetes security best practices (e.g., Network Policies, RBAC).
 
 ---
 
