@@ -61,7 +61,6 @@ jobs:
           output: 'trivy-dependency-results_${{ inputs.service_name }}.sarif'
           scanners: 'vuln,secret'
           exit-code: '0' # Set to 0 to not fail the build for now
-          include-dev-deps: true
           # Removed severity and ignore-unfixed to capture all results
 
       # Upload Bandit SARIF results
