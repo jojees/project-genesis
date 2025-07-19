@@ -12,3 +12,4 @@ poetry add bandit --group dev
 ```
 poetry run bandit -r . -ll -f json -o bandit_results.json
 ```
+
