@@ -43,24 +43,25 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Bandit and Trivy CLI
+      - name: Install Bandit
         run: |
           pip install bandit bandit-sarif-formatter
-          # Install Trivy CLI locally for dependency scanning on the filesystem
-          wget https://github.com/aquasecurity/trivy/releases/download/v0.52.2/trivy_0.52.2_linux-amd64.deb
-          sudo dpkg -i trivy_0.52.2_linux-amd64.deb
 
-      # Parallel Step 1: Run Bandit SAST Scan
       - name: Run Bandit Security Scan for ${{ inputs.service_name }}
         run: |
           cd src/${{ inputs.service_name }}
           bandit -r . -ll -f sarif -o bandit_results.sarif || true
 
       - name: Run Trivy Dependency Scan for ${{ inputs.service_name }}
-        run: |
-          cd src/${{ inputs.service_name }}
-          trivy fs --format sarif --output ../../trivy-dependency-results.sarif \
-            --scanners vuln,secret --exit-code 0 . 
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          path: 'src/${{ inputs.service_name }}'
+          format: 'sarif'
+          output: 'trivy-dependency-results_${{ inputs.service_name }}.sarif'
+          scanners: 'vuln,secret'
+          exit-code: '0' # Set to 0 to not fail the build for now
+          # Removed severity and ignore-unfixed to capture all results
 
       # Upload Bandit SARIF results
       - name: Upload Bandit SARIF results
@@ -76,7 +77,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         if: always() # Ensure upload even if previous steps failed
         with:
-          sarif_file: trivy-dependency-results.sarif
+          sarif_file: trivy-dependency-results_${{ inputs.service_name }}.sarif
           wait-for-processing: true
           category: ${{ inputs.service_name }}-trivy-dependency-scan
 
@@ -140,7 +141,7 @@ jobs:
         with:
           image-ref: "${{ steps.docker_meta.outputs.TAGS }}"
           format: 'sarif'
-          output: 'trivy-image-results.sarif'
+          output: 'trivy-image-results_${{ inputs.service_name }}.sarif'
           scanners: 'vuln,secret,config'
           exit-code: '0'
           # ignore-unfixed: true
@@ -150,6 +151,6 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         if: always() # Upload results even if the previous step failed
         with:
-          sarif_file: trivy-image-results.sarif
+          sarif_file: trivy-image-results_${{ inputs.service_name }}.sarif
           wait-for-processing: true
           category: ${{ inputs.service_name }}-trivy-image-scan
