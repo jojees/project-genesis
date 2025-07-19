@@ -30,7 +30,7 @@ on:
         required: true
 
 jobs:
-  build-service:
+  security-scans:
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -38,25 +38,58 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python for Bandit
+      - name: Setup Python for scans
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
       - name: Install Bandit
-        run: pip install bandit bandit-sarif-formatter
+        run: |
+          pip install bandit bandit-sarif-formatter
 
       - name: Run Bandit Security Scan for ${{ inputs.service_name }}
         run: |
           cd src/${{ inputs.service_name }}
           bandit -r . -ll -f sarif -o bandit_results.sarif || true
 
+      - name: Run Trivy Dependency Scan for ${{ inputs.service_name }}
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'src/${{ inputs.service_name }}'
+          format: 'sarif'
+          output: 'trivy-dependency-results_${{ inputs.service_name }}.sarif'
+          scanners: 'vuln,secret'
+          exit-code: '0' # Set to 0 to not fail the build for now
+          # Removed severity and ignore-unfixed to capture all results
+
+      # Upload Bandit SARIF results
       - name: Upload Bandit SARIF results
         uses: github/codeql-action/upload-sarif@v3
+        if: always() # Ensure upload even if Bandit (or Trivy) failed
         with:
           sarif_file: src/${{ inputs.service_name }}/bandit_results.sarif
           wait-for-processing: true
           category: ${{ inputs.service_name }}-bandit
+
+      # Upload Trivy Dependency Scan results
+      - name: Upload Trivy Dependency Scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() # Ensure upload even if previous steps failed
+        with:
+          sarif_file: trivy-dependency-results_${{ inputs.service_name }}.sarif
+          wait-for-processing: true
+          category: ${{ inputs.service_name }}-trivy-dependency-scan
+
+  # Job 2: Build and Push Docker Image (depends on security scans passing)
+  build-and-push:
+    needs: security-scans
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # Required for uploading SARIF results from image scan
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -101,3 +134,23 @@ jobs:
           tags: ${{ steps.docker_meta.outputs.TAGS }} # Use the tags determined above
           cache-from: type=gha # Enable GitHub Actions cache for build layers
           cache-to: type=gha,mode=max # Store cache for future builds
+
+      # Trivy SCA - Image Scan (after Docker build) 🐳
+      - name: Run Trivy Image Scan for ${{ inputs.service_name }}
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "${{ inputs.docker_org }}/${{ inputs.docker_repo_prefix }}${{ inputs.service_name }}:${{ inputs.github_sha }}"
+          format: 'sarif'
+          output: 'trivy-image-results_${{ inputs.service_name }}.sarif'
+          scanners: 'vuln,secret,misconfig'
+          exit-code: '0'
+          # ignore-unfixed: true
+          # severity: 'HIGH,CRITICAL'
+
+      - name: Upload Trivy Image Scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() # Upload results even if the previous step failed
+        with:
+          sarif_file: trivy-image-results_${{ inputs.service_name }}.sarif
+          wait-for-processing: true
+          category: ${{ inputs.service_name }}-trivy-image-scan
