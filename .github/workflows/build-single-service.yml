@@ -102,7 +102,7 @@ jobs:
         if: always() # Upload even if tests fail, useful for debugging
         with:
           name: coverage-report-${{ inputs.service_name }}
-          path: ${{ inputs.service_name }}/coverage.xml
+          path: src/${{ inputs.service_name }}/coverage.xml
 
   # Job 2: Build and Push Docker Image (depends on security scans passing)
   build-and-push:
