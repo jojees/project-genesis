@@ -186,15 +186,31 @@ This document tracks pending actions and improvements for our services and Kuber
     Logs should follow a clear, consistent structure (e.g., JSON or a well-defined plain text format) for better integration with logging tools and easier debugging.
 * **Automate Artifact Building and Storage with GitHub Actions and Azure Artifacts**: Implement a CI/CD pipeline using GitHub Actions to automatically build application artifacts. Configure the pipeline to then store these generated artifacts in Azure Artifacts for centralized storage, versioning, and easy consumption by other services or deployment processes. This will streamline the build and release process and ensure a reliable source for deployable components.
 
+---
+
+### General Project Documentation
+
+* [ ] **Implement API Documentation (OpenAPI/Swagger)**:
+    * **Purpose**: Provide precise, machine-readable API contracts for all services, crucial for inter-service communication and external consumers.
+    * **Action**: For Python services, use libraries like FastAPI's built-in OpenAPI generation or Flask-RESTX/Connexion to automatically generate OpenAPI (Swagger) specifications.
+    * **Details**: Document endpoints, request/response schemas, authentication, and error codes.
+    * **Location**: Configure services to expose API docs (e.g., `/docs` or `/redoc` for FastAPI) and potentially commit the generated `openapi.yaml` to `api-docs/` in the repository.
+
+---
+
+### General Project Management
+
+* **Create GitHub Issues for all `TODO.md` entries**: Go through the `TODO.md` file and create a dedicated GitHub Issue for each individual activity or enhancement listed. Assign appropriate labels (e.g., `enhancement`, `bug`, `documentation`, `devsecops`), assignees, and project board associations to each issue. This will allow for better tracking, prioritization, and collaboration on all pending tasks.
+
+---
+
 ## CI/CD & DevSecOps Enhancements
 
 * **Automate GitHub Issue Creation from Code Scanning Alerts**: Implement a GitHub Actions workflow (`.github/workflows/create-sast-issues.yml`) to automatically create GitHub Issues for new Code Scanning alerts (e.g., Bandit findings). This workflow should trigger on `code_scanning_alert` events, extract relevant alert details (tool, rule, severity, location), and create a new issue with appropriate labels (e.g., `security`, `sast`, `high`). Grant the workflow `issues: write` permissions.
 * **Extend SAST Scans to Feature Branches**: Configure GitHub Actions workflows to perform SAST scans (using Bandit) on all feature branches when Python application code (`src/**.py`) is modified. This will "shift left" security feedback, allowing developers to identify and remediate issues before opening Pull Requests to `staging`. Ensure the reusable workflow `build-single-service.yml` is called from the feature branch CI for this purpose.
 * **Implement Auto-Merge from Feature to Dev Branch**: Set up a GitHub Actions workflow and/or branch protection rules to automatically merge feature branches into the `dev` branch if all required CI checks (build, tests, and potentially SAST/linting if made blocking) succeed. This streamlines the integration process for development cycles.
 
-## General Project Management
-
-* **Create GitHub Issues for all `TODO.md` entries**: Go through the `TODO.md` file and create a dedicated GitHub Issue for each individual activity or enhancement listed. Assign appropriate labels (e.g., `enhancement`, `bug`, `documentation`, `devsecops`), assignees, and project board associations to each issue. This will allow for better tracking, prioritization, and collaboration on all pending tasks.
+---
 
 ### DevSecOps Enhancements
 
@@ -225,3 +241,36 @@ This document tracks pending actions and improvements for our services and Kuber
 
 * **Container Registry Integration (GHCR):**
     * **Complete GHCR Integration:** Ensure all services are consistently building and pushing Docker images to **both Docker Hub and GitHub Container Registry (GHCR)**. Verify images appear in the Packages section of the GitHub repository. (Note: Initial setup is in place, this is for ongoing verification and full adoption across services if not already universal).
+
+---
+
+## Testing Strategy & Coverage
+
+* [ ] **Write comprehensive unit/integration tests for 'audit-event-generator' service**.
+* [ ] **Write comprehensive unit/integration tests for 'audit-log-analysis' service**.
+* [ ] **Write comprehensive unit/integration tests for 'notification-service'**.
+* [ ] **Improve test coverage for 'event-audit-dashboard' service**: Address the remaining ~21% uncovered lines in `event_audit_dashboard/app.py` (specifically lines `46-48, 72-80, 93`).
+* [ ] **Robust Integration Testing Strategy**: Explore using Docker Compose or GitHub Actions services to spin up temporary external dependencies (e.g., databases, message queues) for more realistic integration tests.
+* [ ] **Database Migrations for Tests**: Implement a strategy to apply and tear down database migrations for integration tests.
+* [ ] **Parameterized Tests**: Utilize `pytest.mark.parametrize` for efficient testing of various inputs and edge cases.
+* [ ] **Code Coverage Gate**: Implement a CI pipeline step to fail builds if code coverage falls below a defined threshold.
+* [ ] **Test Result Summary**: Integrate test result reporting into GitHub Actions workflow summaries for concise overviews.
+* [ ] **Test Duration Tracking**: Monitor and report test suite execution times to identify performance bottlenecks.
+* [ ] **Parallel Test Execution**: Explore running tests in parallel (e.g., with `pytest-xdist`) to reduce CI pipeline duration.
+* [ ] **Containerized Test Environments**: Investigate running `pytest` inside a Docker container that mimics the production image for consistency.
+* [ ] **Implement Component Tests for Services**:
+    * **Purpose**: Verify individual service functionality including direct infrastructure dependencies (DB, MQ), while mocking other services.
+    * **Action**: For `notification-service`, `audit-log-analysis`, and `audit-event-generator`, create dedicated test suites that spin up local, ephemeral instances of PostgreSQL and/or RabbitMQ using `services` in GitHub Actions or Docker Compose locally.
+    * **Details**: Focus on testing data persistence, message consumption/publishing, and core business logic that involves these direct external systems.
+* [ ] **Implement Contract Tests for Service Interactions**:
+    * **Purpose**: Ensure compatibility of API interfaces and message formats between services without deploying the full stack.
+    * **Action**:
+        * **For API calls (e.g., Dashboard -> Notification Service)**: Implement consumer-driven contract tests (e.g., using Pact) where the consumer defines expectations and the provider verifies its adherence.
+        * **For Message Queues (e.g., Generator -> Analysis, Analysis -> Notification)**: Define message contracts and ensure producers send messages matching the contract, and consumers process messages according to their expected contract.
+    * **Details**: Integrate contract validation into individual service CI pipelines for fast feedback.
+* [ ] **Implement Focused Integration Tests**:
+    * **Purpose**: Validate critical multi-service workflows and interactions with real infrastructure, used as high-level sanity checks.
+    * **Action**: Select 1-2 most critical end-to-end flows (e.g., Event Generator -> Analysis -> Notification Service -> Dashboard display).
+    * **Details**: These tests will be more complex to set up (involving multiple running services and their dependencies) and should be fewer in number, possibly run less frequently than component/contract tests due to their longer execution time.
+
+---

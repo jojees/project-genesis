@@ -1,4 +1,4 @@
-# src/event-audit-dashboard/CONTEXT.md
+# CONTEXT
 
 ## Event Audit Dashboard Service Overview 🖥️
 ---
@@ -47,6 +47,38 @@ The `event-audit-dashboard` service is the **frontend web application** of the A
 ### Inter-Service Communication
 * The `event-audit-dashboard` service communicates directly with the **Notification Service** via **HTTP (REST API calls)**.
 * It is a **client** to the Notification Service's `/alerts` and `/alerts/{alert_id}` endpoints.
+
+---
+
+### Testing Strategy and Coverage ✅
+
+The service includes a comprehensive suite of unit tests to ensure its reliability and correct behavior across various scenarios, especially concerning its interaction with the Notification Service API.
+
+#### Test Framework and Tools
+* **Pytest**: The primary testing framework.
+* **`pytest-mock` (mocker)**: Used extensively for mocking external dependencies, primarily HTTP requests made via the `requests` library. This allows tests to run in isolation without needing a live Notification Service.
+* **`pytest-cov`**: Used for measuring code coverage, ensuring that a significant portion of the application's logic is exercised by tests.
+
+#### Key Scenarios Covered by Tests
+The unit tests cover the following critical scenarios:
+
+* **Root Dashboard (`/`)**:
+    * **Successful Alert Fetch**: Displays alerts correctly when the Notification Service API returns a 200 OK with alert data.
+    * **API Connection Error**: Gracefully handles network issues (e.g., service not reachable) when connecting to the Notification Service.
+    * **API Timeout**: Verifies proper error display when the API call exceeds its timeout limit.
+    * **API Non-200 Status**: Ensures an appropriate error message is shown for non-successful HTTP responses (e.g., 500 Internal Server Error, 403 Forbidden).
+    * **Empty Alerts List**: Confirms the "No alerts to display" message is rendered when the API returns a 200 OK with an empty list of alerts.
+
+* **Alert Detail Page (`/alert/<alert_id>`)**:
+    * **Successful Specific Alert Fetch**: Displays all details of a single alert when successfully retrieved from the API.
+    * **Alert Not Found (404)**: Handles cases where the API explicitly returns a 404 for a requested `alert_id`, displaying a "not found" specific error.
+    * **Generic API Failure**: Covers other API failures (e.g., 500 Internal Server Error, connection issues, timeouts) when fetching specific alert details, showing a relevant error message.
+
+* **Health Check (`/healthz`)**:
+    * Verifies the health endpoint always returns a 200 OK status.
+
+#### Code Coverage
+Current test suite provides **~79% line coverage** for `app.py`. The remaining uncovered lines typically pertain to unlikely error paths or logging statements that are not triggered by current test scenarios. Further test development may incrementally increase this coverage.
 
 ---
 
