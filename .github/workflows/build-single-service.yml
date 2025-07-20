@@ -47,6 +47,13 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install service dependencies
+        working-directory: src/${{ inputs.service_name }}
+        run: poetry install --no-root
+
       - name: Install Bandit
         run: |
           pip install bandit bandit-sarif-formatter
