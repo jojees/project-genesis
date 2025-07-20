@@ -58,6 +58,7 @@ jobs:
       security-events: write
     with:
       service_name: event-audit-dashboard
+      service_module_name: event_audit_dashboard
       docker_org: ${{ github.repository_owner }}
       docker_repo_prefix: ""
       ref_name: ${{ github.ref_name }}
@@ -75,6 +76,7 @@ jobs:
       security-events: write
     with:
       service_name: notification-service
+      service_module_name: notification_service
       docker_org: ${{ github.repository_owner }}
       docker_repo_prefix: ""
       ref_name: ${{ github.ref_name }}
@@ -92,6 +94,7 @@ jobs:
       security-events: write
     with:
       service_name: audit-log-analysis
+      service_module_name: audit_analysis
       docker_org: ${{ github.repository_owner }}
       docker_repo_prefix: ""
       ref_name: ${{ github.ref_name }}
@@ -109,6 +112,7 @@ jobs:
       security-events: write
     with:
       service_name: audit-event-generator
+      service_module_name: .
       docker_org: ${{ github.repository_owner }}
       docker_repo_prefix: ""
       ref_name: ${{ github.ref_name }}

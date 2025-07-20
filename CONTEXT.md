@@ -335,7 +335,7 @@ The database schema and any updates are currently managed directly within the **
 * **Dependencies**: Primarily relies on **RabbitMQ** for event publishing.
 * **Observability**: Exposes `/healthz` and `/metrics` endpoints for health checks and Prometheus integration.
 * **Detailed Context**: For in-depth information, refer to [src/audit-event-generator/CONTEXT.md](src/audit-event-generator/CONTEXT.md).
-
+---
 ### Audit Log Analysis Service (src/audit-log-analysis) 🕵️
 
 * **Role**: A critical backend service that **consumes raw audit events** from the `audit_events` RabbitMQ queue.
@@ -344,7 +344,7 @@ The database schema and any updates are currently managed directly within the **
 * **Dependencies**: Relies on **RabbitMQ** for event consumption and alert publishing, and **Redis** for stateful analysis (e.g., tracking login attempts).
 * **Observability**: Exposes `/healthz` and `/metrics` endpoints for health monitoring and Prometheus integration.
 * **Detailed Context**: For in-depth information, refer to [src/audit-log-analysis/CONTEXT.md](src/audit-log-analysis/CONTEXT.md).
-
+---
 ### Event Audit Dashboard Service (src/event-audit-dashboard) 🖥️
 * **Role:** The frontend web application of the AuditFlow Platform.
 * **Functionality:** Provides a user interface to visualize audit alerts. It fetches recent alerts from the `Notification Service` API and displays them on a dashboard, also offering detailed views for individual alerts.
@@ -353,7 +353,7 @@ The database schema and any updates are currently managed directly within the **
 * **Observability:** Exposes a `/healthz` endpoint for health checks.
 * **Deployment:** Uses Gunicorn for production readiness.
 * **Detailed Context:** For in-depth information, refer to src/event-audit-dashboard/CONTEXT.md.
-
+---
 ### Notification Service (src/notification-service) 🔔
 * **Role:** The central backend service for **storing and retrieving audit alerts**.
 * **Functionality:** Consumes **alert messages from RabbitMQ**, persists them into a **PostgreSQL database**, and exposes a **RESTful API** for other services (like the dashboard) to query these alerts.
@@ -362,3 +362,61 @@ The database schema and any updates are currently managed directly within the **
 * **Observability:** Exposes a `/healthz` endpoint for health checks and API endpoints for alert retrieval.
 * **Deployment:** Built with **Quart** and served by **Uvicorn** for asynchronous, production-grade performance.
 * **Detailed Context:** For in-depth information, refer to src/notification-service/CONTEXT.md.
+
+---
+
+## 🧪 Testing Philosophy & Strategy Summary
+
+Our approach to unit and integration testing is guided by practical experience, long-term maintainability, and insights from the broader development community. Here’s a summary of key takeaways and how they shape our testing practices:
+
+---
+
+### 🔹 General Guidelines
+
+- **No arbitrary coverage targets** (e.g. 100%) — coverage is not a guarantee of quality.
+- Focus on **high-value coverage**: business logic, edge cases, data validation, and workflows with real-world consequences.
+- Prioritize **breadth over depth**: it's better to have all files partially tested than a few files exhaustively covered.
+
+---
+
+### 🔹 Unit Testing
+
+- Use unit tests to verify **core logic**, **critical transformations**, and **small testable functions**.
+- Avoid over-testing trivial code (getters, boilerplate, etc.).
+- Keep tests meaningful and easy to understand — they should explain what the code does and catch regressions early.
+
+---
+
+### 🔹 Integration Testing
+
+- Integration tests simulate how components interact under real conditions.
+- Ideal for:
+  - HTTP routes and controllers
+  - Database interactions
+  - Service boundaries
+- Integration tests often provide more realistic coverage than isolated unit tests.
+
+---
+
+### 🔹 On Test-Driven Development (TDD)
+
+- TDD can help guide design and ensure correctness, especially in complex or evolving modules.
+- However, strict TDD can lead to **test bloat** and **poor design** when followed dogmatically.
+- Use it **when it adds value**, not as a mandatory rule.
+
+---
+
+### 🔹 Coverage Philosophy
+
+- **Test what matters**, not just what exists.
+- Treat coverage as a **feedback tool**, not a goal.
+- Use integration and system tests to validate behavior from the user's point of view.
+- Maintain tests that **prevent regressions**, not tests that just exercise lines of code.
+
+---
+
+### 🧠 Summary Quote
+
+> “The right number of tests is not a number — it's the set of tests that gives you confidence to ship and change code safely.”
+
+---
