@@ -201,6 +201,7 @@ This document tracks pending actions and improvements for our services and Kuber
 ### General Project Management
 
 * **Create GitHub Issues for all `TODO.md` entries**: Go through the `TODO.md` file and create a dedicated GitHub Issue for each individual activity or enhancement listed. Assign appropriate labels (e.g., `enhancement`, `bug`, `documentation`, `devsecops`), assignees, and project board associations to each issue. This will allow for better tracking, prioritization, and collaboration on all pending tasks.
+* **Transition to 'git clean -fdX' for cleanup.**: This will require ensuring that all files and directories intended for cleanup (like __pycache__, .pytest_cache, bandit_results.json, coverage.xml, .coverage, .env, .python-version) are correctly listed and ignored in the .gitignore file.
 
 ---
 

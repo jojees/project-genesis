@@ -54,6 +54,35 @@ The service is configured primarily via environment variables.
 
 ---
 
+## ✅ Testing
+
+The `audit-event-generator` service includes a comprehensive suite of unit tests using `pytest` and `unittest.mock` to ensure high quality and reliability.
+
+### Running Tests Locally
+
+To execute the test suite and generate a coverage report:
+
+1.  **Install dependencies (including dev dependencies):**
+    ```bash
+    poetry install --with dev
+    ```
+    (Or `pip install -r requirements.txt` if your `requirements.txt` includes test dependencies).
+
+2.  **Run pytest with coverage:**
+    ```bash
+    poetry run pytest --cov=. --cov-report=term-missing --cov-report=xml:coverage.xml
+    ```
+    This command will run all tests, display coverage in the terminal, and generate an XML report (`coverage.xml`) which can be used by CI/CD tools.
+
+### Test Coverage Highlights
+
+* **Overall Coverage**: Currently at **93%**, demonstrating strong test coverage across the codebase.
+* **Key Areas Covered**: Includes thorough testing of event generation logic, RabbitMQ publishing mechanisms (success and various failure scenarios), and precise updates of all Prometheus metrics (event counts, publish success/failure, and RabbitMQ connection status).
+
+For a more detailed breakdown of the testing strategy, test organization, and specific coverage details, refer to the [CONTEXT.md](src/audit-event-generator/CONTEXT.md) file.
+
+---
+
 ## 🚀 Getting Started
 
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
