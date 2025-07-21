@@ -95,6 +95,16 @@ This document tracks pending actions and improvements for our services and Kuber
 
     If not needed, research and implement automated cleanup strategies for old deployments and replicaSets (e.g., configuring `revisionHistoryLimit` in Deployments, or using custom scripts/operators to remove resources older than 'X' days). Understand the purpose of keeping old records (e.g., for rollbacks) and determine an appropriate retention policy.
 
+### Externalize Application Configuration (CRD/ConfigMaps)
+
+* **Purpose**: Move hardcoded application parameters (like `FAILED_LOGIN_WINDOW_SECONDS`, `FAILED_LOGIN_THRESHOLD`, `SENSITIVE_FILES`) out of the application code (`config.py`). This allows for easier updates, version control, and operational management.
+* **Action**: Investigate and implement a Kubernetes-native mechanism for external configuration.
+* **Details**:
+    * Evaluate using **Kubernetes ConfigMaps** for simpler key-value based configuration. These can be mounted as files or environment variables into Pods.
+    * Explore **Kubernetes Custom Resource Definitions (CRDs)** for defining application-specific configuration as a first-class API object. This is especially powerful if you plan to implement an Operator pattern for dynamic, schema-validated updates.
+    * Modify applications to consume configuration from the chosen external source (e.g., reading from mounted files from a ConfigMap, or querying a custom resource via the Kubernetes API if an operator is in place).
+* **Impact on Tests**: The unit tests for `config.py` (specifically `test_config_uses_default_values`, `test_sensitive_files_list`, and `test_failed_login_rule_parameters`) will **need to be updated** to reflect the new configuration loading mechanism. They should no longer assert hardcoded values, but rather assert that the application correctly loads values from the external source (e.g., a mock ConfigMap or CRD).
+
 ---
 
 ### Kubernetes YAML Validation & Linting
@@ -127,6 +137,102 @@ This document tracks pending actions and improvements for our services and Kuber
 
 * **Fix Audit Generator Timestamp**: Ensure the audit generator's timestamp adheres to ISO 8601. It should either end with a timezone offset (like `+00:00`) or a `Z` (to denote UTC), but not both.
 * **Change Audit Generator Events/Sec**: Implement a mechanism to change the `events/sec` rate for the `audit_generator` service using its API.
+
+### Audit Log Analysis Service
+
+* **Refactor Redis Health Check**: Introduce a dedicated function (e.g., `check_redis_status()`) in `redis_service.py` that periodically pings Redis to verify its connectivity.
+    * **Purpose**: Decouple the initial connection logic from continuous health monitoring. This allows the application to report Redis connectivity status dynamically without needing to re-initialize the entire client on every check.
+    * **Action**:
+        * Create a new function in `redis_service.py` that performs `redis_client.ping()`.
+        * This function should update `health_manager.set_redis_status(True/False)` based on the ping result.
+        * **Add logging within `check_redis_status()`**: Log successful pings (e.g., `logger.debug("Redis Service: Ping successful.")`) and failed pings (e.g., `logger.error("Redis Service: Ping failed...")`), including a warning if `redis_client` is not yet initialized.
+        * Integrate this new function into a background task or a periodic check mechanism within the `audit-log-analysis` service (e.g., a separate thread or an asyncio task) to continuously monitor Redis health.
+    * **Impact on Tests**: This refactoring will enable a dedicated `test_redis_ping_updates_health_status` test, which can then be implemented to verify the new function's behavior.
+* **Correct Prometheus Metrics Content-Type**: Ensure the `/metrics` endpoint in `audit_analysis/api.py` returns the correct `Content-Type` header for Prometheus.
+    * **Problem**: Currently, the `/metrics` endpoint defaults to `text/html`, which is not the standard for Prometheus scraping.
+    * **Action**:
+        * Modify the `prometheus_metrics` function in `src/audit-log-analysis/audit_analysis/api.py` to explicitly set the `mimetype` when returning the response.
+        * **Recommended Code Change:**
+            ```python
+            from flask import Flask, jsonify, Response # Import Response
+            from prometheus_client import generate_latest
+            # ... other imports ...
+
+            @app.route('/metrics')
+            def prometheus_metrics():
+                """Endpoint for Prometheus to scrape metrics."""
+                return Response(generate_latest(), mimetype='text/plain; version=0.0.4; charset=utf-8')
+            ```
+    * **Impact on Tests**: After applying this change to `audit_analysis/api.py`, you should **revert the temporary change** made in `tests/test_api.py`. Specifically, change the assertion in `test_metrics_endpoint_returns_data` back to:
+        ```python
+        assert response.content_type == 'text/plain; version=0.0.4; charset=utf-8'
+        ```
+* **Revert `test_metrics_endpoint_content_type` Assertion**: The `test_metrics_endpoint_content_type` test in `tests/test_api.py` was temporarily adjusted to pass with the incorrect `Content-Type`.
+    * **Problem**: The test currently asserts `response.content_type == 'text/html; charset=utf-8'`.
+    * **Action**: Once the `audit_analysis/api.py` file has been updated to return the correct `Content-Type` for the `/metrics` endpoint (as described in the "Correct Prometheus Metrics Content-Type (API Endpoint)" entry above), this test's assertion should be reverted.
+    * **Recommended Code Change (in `tests/test_api.py`):**
+        ```python
+        assert response.content_type == 'text/plain; version=0.0.4; charset=utf-8'
+        ```
+    * **Impact**: This will ensure the test correctly validates the Prometheus-standard `Content-Type` once the application code is fixed.
+* **Refactor `audit_analysis/main.py` for Testability**: The `main` function in `audit_analysis/main.py` is currently not a callable function, making it difficult to unit test.
+    * **Problem**: All startup logic is directly within the `if __name__ == '__main__':` block, leading to an `AttributeError` when `pytest` tries to call `_main.main()`.
+    * **Action**: Encapsulate the main startup logic within a `def main():` function at the module level.
+    * **Recommended Code Change (in `src/audit-log-analysis/audit_analysis/main.py`):**
+        ```python
+        # src/audit-log-analysis/audit_analysis/main.py
+
+        import sys
+        import threading
+        from prometheus_client import start_http_server
+
+        # Relative imports for our modules
+        from . import config
+        from .logger_config import logger
+        from . import redis_service
+        from . import rabbitmq_consumer_service
+        from . import api
+
+        def main(): # <--- Add this function definition
+            """
+            Main entry point for the Audit Log Analysis service.
+            Initializes and starts all necessary components.
+            """
+            logger.info("Main: Starting Audit Log Analysis Service...")
+
+            try:
+                start_http_server(config.PROMETHEUS_PORT)
+                logger.info(f"Main: Prometheus metrics server started on port {config.PROMETHEUS_PORT}")
+            except Exception as e:
+                logger.critical(f"Main: FATAL: Could not start Prometheus metrics server: {e}", exc_info=True)
+                sys.exit(1)
+
+            if not redis_service.initialize_redis():
+                logger.critical("Main: Initial Redis connection failed from main thread. Consumer thread will retry. Continuing startup.")
+
+            consumer_thread = threading.Thread(target=rabbitmq_consumer_service.start_consumer, daemon=True, name="RabbitMQConsumerThread")
+            try:
+                consumer_thread.start()
+                api.consumer_thread_ref = consumer_thread
+                logger.info("Main: RabbitMQ consumer thread started.")
+            except Exception as e:
+                logger.critical(f"Main: FATAL: Could not start RabbitMQ consumer thread: {e}", exc_info=True)
+                sys.exit(1)
+
+            logger.info(f"Main: Starting Flask application on 0.0.0.0:{config.APP_PORT}...")
+            try:
+                api.app.run(host='0.0.0.0', port=config.APP_PORT)
+                logger.info("Main: Flask application stopped cleanly.")
+            except Exception as e:
+                logger.critical(f"Main: FATAL: Flask application crashed unexpectedly: {e}", exc_info=True)
+                sys.exit(1)
+
+            logger.info("Main: Main application process exiting.")
+
+        if __name__ == '__main__':
+            main() # <--- Call the new main function here
+        ```
+    * **Impact on Tests**: Once this change is applied to `audit_analysis/main.py`, you should **remove the `pytest.raises(AttributeError)` block** from `tests/test_main.py` and **uncomment the original assertions** to fully test the successful startup flow.
 
 ### Notification Service
 
