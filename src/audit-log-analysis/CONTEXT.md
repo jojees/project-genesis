@@ -28,6 +28,7 @@ The application is modularized into several Python files within the `audit_analy
     * Launches the RabbitMQ consumer loop in a **separate daemon thread** (`RabbitMQConsumerThread`) to handle message consumption asynchronously.
     * Starts the Flask API server, making it accessible for health checks and metrics scraping.
 * **Robust Startup**: Includes `try-except` blocks for critical startup phases, logging errors and exiting if fundamental components cannot be initialized.
+* **Current Structure Note**: All startup logic is currently directly within the `if __name__ == '__main__':` block, which will be refactored into a callable `main()` function later for improved testability.
 
 #### `api.py`
 * **Flask Application**: Defines the Flask application instance (`app`).
@@ -46,7 +47,7 @@ The application is modularized into several Python files within the `audit_analy
 #### `health_manager.py`
 * **Health State Management**: Maintains the internal connection status for Redis and RabbitMQ (`_redis_connected`, `_rabbitmq_connected`).
 * **Thread Safety**: Uses a `threading.Lock` to ensure thread-safe updates to health status variables.
-* **Prometheus Integration**: Directly updates associated Prometheus `Gauge` metrics (`redis_connection_status`, `rabbitmq_consumer_connection_status`) when connection statuses change.
+* **Prometheus Integration**: Directly updates associated Prometheus `Gauge` metrics (`redis_connection_status`, `rabbitmq_consumer_connection_status`) when connection statuses changes.
 
 #### `logger_config.py`
 * **Centralized Logging**: Configures a consistent logging setup for the entire application.
@@ -75,6 +76,41 @@ The application is modularized into several Python files within the `audit_analy
 * **Redis Client Management**: Manages the connection to the Redis server.
 * **Connection Test**: Uses `redis_client.ping()` to verify connectivity.
 * **Health Status Integration**: Updates the `health_manager` and corresponding Prometheus gauge based on connection success or failure.
+
+#### `prometheus_client.py` (Implicitly Used)
+* **Prometheus Client Library**: This is the third-party library used for instrumenting the application with Prometheus metrics.
+* **Key Functions**:
+    * `start_http_server`: Used in `main.py` to launch the HTTP server that exposes the `/metrics` endpoint.
+    * `generate_latest`: Used in `api.py` to render the current state of all registered Prometheus metrics into the text-based exposition format.
+
+#### `sys.py` (Implicitly Used)
+* **System-Specific Parameters and Functions**: This built-in Python module provides access to system-specific parameters and functions.
+* **Key Function**:
+    * `sys.exit()`: Used in `main.py` to terminate the application's execution in case of critical, unrecoverable startup failures (e.g., Prometheus server failing to start).
+
+---
+
+### Testing Strategy
+
+The `audit-log-analysis` service employs a comprehensive unit testing strategy to ensure the reliability, correctness, and maintainability of its codebase.
+
+* **Framework**: `pytest` is used as the primary testing framework due to its flexibility, rich set of features (like fixtures), and clear reporting.
+* **Mocking**: The `unittest.mock` library is extensively used to isolate units of code under test. This allows for testing individual functions and components without requiring actual connections to external services like RabbitMQ, Redis, or a running Flask server. Mocking ensures tests are fast, reliable, and independent of external infrastructure.
+* **Modular Test Structure**: Tests are organized into dedicated files (e.g., `test_api.py`, `test_redis_service.py`, `test_rabbitmq_consumer_service.py`) that mirror the application's modular structure. This approach makes it easy to locate relevant tests and understand the tested functionality.
+* **Fixtures (`conftest.py`)**: Shared setup and teardown logic, such as clearing Prometheus registries and managing module imports for clean test isolation, is centralized in `tests/conftest.py` using `pytest` fixtures.
+* **Focus on Isolation**: Each test case aims to test a specific unit of functionality in isolation, minimizing dependencies between tests and making it easier to pinpoint the source of failures.
+* **Current Test Status**:
+    * **Total Tests**: 52 tests are currently collected and executed.
+    * **Overall Coverage**: The test suite achieves approximately 76% overall code coverage.
+    * **Key Coverage Areas**:
+        * `audit_analysis/config.py`: 100%
+        * `audit_analysis/health_manager.py`: 100%
+        * `audit_analysis/logger_config.py`: 100%
+        * `audit_analysis/metrics.py`: 100%
+        * `audit_analysis/redis_service.py`: 100%
+    * **Areas for Improvement**:
+        * `audit_analysis/main.py`: Currently has 26% coverage. This is a known limitation due to its current structure (logic directly in `if __name__ == '__main__':` block), which is slated for refactoring into a callable `main()` function.
+        * `audit_analysis/rabbitmq_consumer_service.py`: Has 73% coverage, indicating further testing is needed for various message processing paths, error handling, and connection resilience scenarios.
 
 ---
 
