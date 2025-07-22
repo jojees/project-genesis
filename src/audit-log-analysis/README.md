@@ -149,6 +149,48 @@ These instructions will guide you through setting up and running the `audit-log-
 
 ---
 
+## ✅ Testing
+
+The `audit-log-analysis` service is rigorously tested using `pytest` and `unittest.mock` to ensure high quality and reliability.
+
+### Running Tests
+
+To execute the full test suite, navigate to the `src/audit-log-analysis` directory and run:
+
+```bash
+poetry run pytest
+```
+
+To generate a detailed coverage report (including missing lines):
+```bash
+poetry run pytest --cov=audit_analysis --cov-report=term-missing
+```
+
+#### Test Strategy
+- **Framework**: `pytest` is used for its powerful features, including fixtures for efficient test setup and teardown.
+- **Isolation**: `unittest.mock` is extensively employed to isolate units of code, allowing tests to run independently of external dependencies like RabbitMQ, Redis, or the Flask server. This ensures fast, reliable, and deterministic test execution.
+- **Modular Structure**: Test files are organized to mirror the application's module structure (e.g., `test_api.py` for `api.py`), enhancing test discoverability and maintainability.
+- **Comprehensive Coverage**: The test suite aims for high code coverage, with specific focus on critical components and analysis logic.
+
+#### Current Test Status
+
+As of the last test run:
+- **Total Tests**: 52 tests executed.
+- **Overall Coverage**: Approximately 76% code coverage.
+- **Key Components with High Coverage**:
+  - `audit_analysis/config.py`: 100%
+  - `audit_analysis/health_manager.py`: 100%
+  - `audit_analysis/logger_config.py`: 100%
+  - `audit_analysis/metrics.py`: 100%
+  - `audit_analysis/redis_service.py`: 100%
+
+- **Areas for Future Improvement**:
+  - `audit_analysis/main.py`: Currently has 26% coverage. This is a known area for refactoring to improve testability (see `TODO.md`).
+  - `audit_analysis/rabbitmq_consumer_service.py`: Has 73% coverage, indicating further testing is needed for various message processing paths and error handling.
+
+
+---
+
 ## ☸️ Kubernetes Deployment
 
 This service is designed for deployment within a Kubernetes cluster. The base Kubernetes manifests are located in `k8s/base/audit-log-analysis/`.
