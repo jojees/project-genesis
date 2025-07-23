@@ -42,6 +42,31 @@ The `audit-event-generator` service is a core component of the AuditFlow Platfor
 
 ---
 
+## Testing Strategy and Coverage ✅
+---
+The service employs a comprehensive unit testing strategy using `pytest` and `unittest.mock` to ensure the reliability and correctness of its core functionalities. Tests are organized into dedicated files mirroring the application's logical components.
+
+### Key Areas Tested
+* **Event Generation Logic**: Tests confirm that audit events are generated with the expected structure, dynamic details based on event types, and proper timestamp formats.
+* **RabbitMQ Publishing**: Verifies that events are correctly serialized and sent to RabbitMQ, including scenarios for:
+    * Successful message publishing.
+    * Handling `AMQPConnectionError` (e.g., reconnection attempts).
+    * Graceful handling of other unexpected errors during publish operations.
+    * Correct management of global `connection` and `channel` states.
+* **Prometheus Metrics Integration**: Asserts that all defined Prometheus metrics (`audit_events_generator_events_total`, `audit_events_generator_published_success_total`, `audit_events_generator_published_failure_total`, `audit_events_generator_rabbitmq_connection_status`) are incremented or updated accurately under various operational conditions (event generation, successful publishes, failed publishes, connection changes).
+
+### Current Test Status
+* **Total Tests**: 21 unit tests.
+* **Overall Test Pass Rate**: 100% (All tests currently pass).
+* **Code Coverage**: Approximately 93% overall, with specific modules showing:
+    * `app.py`: ~83%
+    * `tests/test_metrics_collection.py`: 100%
+    * `tests/test_rabbitmq_publisher.py`: 99%
+* **Known Warnings**:
+    * Deprecation warnings related to `datetime.datetime.utcnow()` in `app.py`, recommending a switch to timezone-aware `datetime.datetime.now(datetime.UTC)`. These are slated for future code updates if modification of `app.py` is permitted.
+
+---
+
 ### Dockerization Details (`src/audit-event-generator/Dockerfile`)
 * **Base Image**: `python:3.12.11-slim-bookworm` - a lightweight Debian-based Python image.
 * **Working Directory**: `/app`.

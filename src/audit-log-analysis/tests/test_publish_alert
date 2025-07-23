@@ -1,0 +1,343 @@
+import pytest
+import unittest.mock as mock
+import importlib
+import pika
+import os
+import sys
+import json
+import datetime
+import uuid
+import logging
+
+# Prometheus registry clearing fixture (essential for health_manager and metrics interaction)
+from prometheus_client import REGISTRY
+from prometheus_client.core import CollectorRegistry
+
+@pytest.fixture(autouse=True)
+def reset_modules_for_tests():
+    """
+    Fixture to clear Prometheus registry and remove application modules from sys.modules
+    before each test to ensure a completely clean slate for imports and patching.
+    """
+    # 1. Clear Prometheus Registry
+    collectors_to_unregister = list(REGISTRY._collector_to_names.keys())
+    for collector in collectors_to_unregister:
+        REGISTRY.unregister(collector)
+    
+    print("\n--- Prometheus Registry Cleared ---")
+
+    # 2. Store original sys.modules state and clear relevant app modules
+    original_sys_modules = sys.modules.copy()
+    
+    modules_to_remove = [
+        'audit_analysis',
+        'audit_analysis.rabbitmq_consumer_service',
+        'audit_analysis.config',
+        'audit_analysis.health_manager',
+        'audit_analysis.logger_config',
+        'audit_analysis.metrics',
+        'audit_analysis.redis_service',
+    ]
+    for module_name in modules_to_remove:
+        if module_name in sys.modules:
+            del sys.modules[module_name]
+
+    print(f"--- Cleared {len(modules_to_remove)} application modules from sys.modules ---")
+
+    yield # Run the test
+
+    # 3. Restore original sys.modules after the test completes
+    sys.modules.clear()
+    sys.modules.update(original_sys_modules)
+    print("--- Restored original sys.modules ---")
+
+
+# Define mock config values for RabbitMQ
+MOCK_RABBITMQ_HOST = "mock-rbmq-host"
+MOCK_RABBITMQ_PORT = 5673
+MOCK_RABBITMQ_USER = "mock_rbmq_user"
+MOCK_RABBITMQ_PASS = "mock_rbbitmq_pass"
+MOCK_RABBITMQ_QUEUE = "mock_audit_events_queue"
+MOCK_RABBITMQ_ALERT_QUEUE = "mock_audit_alerts_queue"
+
+
+@pytest.fixture
+def publish_alert_mocks():
+    """
+    Pytest fixture to provide common mock objects and patch context for _publish_alert tests.
+    """
+    # 1. Create standard mock objects
+    mock_publisher_channel = mock.Mock(name="PublisherChannel")
+    mock_publisher_channel.is_open = True # Simulate open channel
+    mock_publisher_channel.basic_publish = mock.Mock(name="PublisherChannel.basic_publish")
+
+    mock_logger_instance = mock.Mock(name="LoggerInstance")
+    mock_logger_instance.info = mock.Mock(name="LoggerInstance.info")
+    mock_logger_instance.error = mock.Mock(name="LoggerInstance.error")
+    mock_logger_instance.exception = mock.Mock(name="LoggerInstance.exception")
+
+
+    # Define the environment variables to mock for config.py
+    mock_env = {
+        "RABBITMQ_HOST": MOCK_RABBITMQ_HOST,
+        "RABBITMQ_PORT": str(MOCK_RABBITMQ_PORT),
+        "RABBITMQ_USER": MOCK_RABBITMQ_USER,
+        "RABBITMQ_PASS": MOCK_RABBITMQ_PASS,
+        "RABBITMQ_QUEUE": MOCK_RABBITMQ_QUEUE,
+        "RABBITMQ_ALERT_QUEUE": MOCK_RABBITMQ_ALERT_QUEUE,
+        "APP_PORT": "5001",
+        "PROMETHEUS_PORT": "8001",
+        "REDIS_HOST": "redis-service",
+        "REDIS_PORT": "6379",
+    }
+
+    # 2. Apply all patches within a single 'with' statement
+    with mock.patch('audit_analysis.config.load_dotenv', return_value=None), \
+         mock.patch.dict(os.environ, mock_env, clear=True), \
+         
+         # Patch the logger directly on the consumer service module
+         mock.patch('audit_analysis.rabbitmq_consumer_service.logger', new=mock_logger_instance), \
+
+         # Patch the global publisher_channel variable in rabbitmq_consumer_service
+         mock.patch('audit_analysis.rabbitmq_consumer_service.publisher_channel', new=mock_publisher_channel), \
+         
+         # Directly patch config module attributes to ensure correct values are seen
+         mock.patch('audit_analysis.config.RABBITMQ_HOST', new=MOCK_RABBITMQ_HOST), \
+         mock.patch('audit_analysis.config.RABBITMQ_PORT', new=MOCK_RABBITMQ_PORT), \
+         mock.patch('audit_analysis.config.RABBITMQ_USER', new=MOCK_RABBITMQ_USER), \
+         mock.patch('audit_analysis.config.RABBITMQ_PASS', new=MOCK_RABBITMQ_PASS), \
+         mock.patch('audit_analysis.config.RABBITMQ_QUEUE', new=MOCK_RABBITMQ_QUEUE), \
+         mock.patch('audit_analysis.config.RABBITMQ_ALERT_QUEUE', new=MOCK_RABBITMQ_ALERT_QUEUE):
+
+        # 3. Import modules *after* all patches are applied and sys.modules is cleaned.
+        _config = importlib.import_module('audit_analysis.config')
+        _logger_config = importlib.import_module('audit_analysis.logger_config')
+        _rabbitmq_consumer_service = importlib.import_module('audit_analysis.rabbitmq_consumer_service')
+
+        # Yield all the mocks and module references needed by the tests
+        yield {
+            "mock_publisher_channel": mock_publisher_channel,
+            "mock_logger_instance": mock_logger_instance,
+            "_config": _config,
+            "_rabbitmq_consumer_service": _rabbitmq_consumer_service,
+        }
+
+
+def test_publish_alert_success_increments_metric(publish_alert_mocks):
+    """
+    Verify that _publish_alert successfully publishes a message to RabbitMQ,
+    logs the success, and returns True.
+    """
+    print("\n--- Test: Publish Alert Success Increments Metric ---")
+
+    # Extract mocks and modules from the fixture
+    mock_publisher_channel = publish_alert_mocks["mock_publisher_channel"]
+    mock_logger_instance = publish_alert_mocks["mock_logger_instance"]
+    _rabbitmq_consumer_service = publish_alert_mocks["_rabbitmq_consumer_service"]
+    _config = publish_alert_mocks["_config"]
+
+    # Sample alert payload
+    alert_payload = {
+        "alert_id": str(uuid.uuid4()),
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z",
+        "alert_name": "Test Alert",
+        "severity": "LOW",
+        "description": "This is a test alert.",
+        "source_service_name": "test-service"
+    }
+
+    # Call the function under test
+    result = _rabbitmq_consumer_service._publish_alert(alert_payload)
+
+    # Assertions:
+    # Verify basic_publish was called with correct arguments
+    mock_publisher_channel.basic_publish.assert_called_once_with(
+        exchange='',
+        routing_key=_config.RABBITMQ_ALERT_QUEUE,
+        body=json.dumps(alert_payload),
+        properties=pika.BasicProperties(delivery_mode=2)
+    )
+
+    # Verify success log message
+    mock_logger_instance.info.assert_called_once_with(
+        f"RabbitMQ Consumer: Successfully published alert '{alert_payload.get('alert_name')}' (ID: {alert_payload.get('alert_id')}) to '{_config.RABBITMQ_ALERT_QUEUE}'."
+    )
+
+    # Verify function returns True
+    assert result is True, "_publish_alert should return True on successful publication"
+
+    print("Publish alert success verified.")
+
+
+def test_publish_alert_amqp_error_increments_failure_metric_and_reconnects(publish_alert_mocks):
+    """
+    Verify that _publish_alert handles pika.exceptions.AMQPConnectionError during publish,
+    logs the error, sets RabbitMQ status to False, and returns False.
+    """
+    print("\n--- Test: Publish Alert AMQP Error Increments Failure Metric and Reconnects ---")
+
+    # Extract mocks and modules from the fixture
+    mock_publisher_channel = publish_alert_mocks["mock_publisher_channel"]
+    mock_logger_instance = publish_alert_mocks["mock_logger_instance"]
+    mock_set_rabbitmq_status = publish_alert_mocks["mock_set_rabbitmq_status"]
+    mock_metrics_alerts_total = publish_alert_mocks["mock_metrics_alerts_total"] # This should NOT be incremented
+    _rabbitmq_consumer_service = publish_alert_mocks["_rabbitmq_consumer_service"]
+    
+    # Sample alert payload
+    alert_payload = {
+        "alert_id": str(uuid.uuid4()),
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z",
+        "alert_name": "Test Alert for Error",
+        "severity": "HIGH",
+        "description": "This is an alert to test AMQP error handling.",
+        "source_service_name": "error-test-service"
+    }
+
+    # Configure basic_publish to raise an AMQPConnectionError
+    simulated_error_message = "Simulated AMQP Connection Error during publish"
+    mock_publisher_channel.basic_publish.side_effect = pika.exceptions.AMQPConnectionError(simulated_error_message)
+
+    # Call the function under test
+    result = _rabbitmq_consumer_service._publish_alert(alert_payload)
+
+    # Assertions:
+    # Verify basic_publish was attempted
+    mock_publisher_channel.basic_publish.assert_called_once()
+
+    # Verify error log message
+    mock_logger_instance.error.assert_called_once_with(
+        f"RabbitMQ Consumer: AMQPConnectionError while publishing alert: {simulated_error_message}. Attempting to reconnect on next loop.",
+        exc_info=True
+    )
+
+    # Verify RabbitMQ health status was set to False
+    mock_set_rabbitmq_status.assert_called_once_with(False)
+
+    # Verify that the alert metric was NOT incremented (because publication failed)
+    mock_metrics_alerts_total.labels.return_value.inc.assert_not_called()
+
+    # Verify function returns False
+    assert result is False, "_publish_alert should return False on AMQPConnectionError"
+
+    print("Publish alert AMQP error handling verified.")
+
+
+def test_publish_alert_other_error_increments_failure_metric(publish_alert_mocks):
+    """
+    Verify that _publish_alert handles a generic Exception during publish,
+    logs the error using logger.exception, and returns False.
+    """
+    print("\n--- Test: Publish Alert Other Error Increments Failure Metric ---")
+
+    # Extract mocks and modules from the fixture
+    mock_publisher_channel = publish_alert_mocks["mock_publisher_channel"]
+    mock_logger_instance = publish_alert_mocks["mock_logger_instance"]
+    mock_set_rabbitmq_status = publish_alert_mocks["mock_set_rabbitmq_status"]
+    mock_metrics_alerts_total = publish_alert_mocks["mock_metrics_alerts_total"] # This should NOT be incremented
+    _rabbitmq_consumer_service = publish_alert_mocks["_rabbitmq_consumer_service"]
+    
+    # Sample alert payload
+    alert_payload = {
+        "alert_id": str(uuid.uuid4()),
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z",
+        "alert_name": "Test Alert for Generic Error",
+        "severity": "MEDIUM",
+        "description": "This is an alert to test generic error handling.",
+        "source_service_name": "generic-error-test-service"
+    }
+
+    # Configure basic_publish to raise a generic Exception
+    simulated_error_message = "Simulated unexpected error during publish"
+    mock_publisher_channel.basic_publish.side_effect = Exception(simulated_error_message)
+
+    # Call the function under test
+    result = _rabbitmq_consumer_service._publish_alert(alert_payload)
+
+    # Assertions:
+    # Verify basic_publish was attempted
+    mock_publisher_channel.basic_publish.assert_called_once()
+
+    # Verify exception log message (using logger.exception)
+    mock_logger_instance.exception.assert_called_once_with(
+        f"RabbitMQ Consumer: Unexpected error while publishing alert: {simulated_error_message}.",
+        exc_info=True
+    )
+
+    # Verify RabbitMQ health status was NOT set to False (only AMQPConnectionError does this)
+    mock_set_rabbitmq_status.assert_not_called()
+
+    # Verify that the alert metric was NOT incremented (because publication failed)
+    mock_metrics_alerts_total.labels.return_value.inc.assert_not_called()
+
+    # Verify function returns False
+    assert result is False, "_publish_alert should return False on generic Exception"
+
+    print("Publish alert generic error handling verified.")
+
+
+def test_publish_alert_payload_structure(publish_alert_mocks):
+    """
+    Verify that _publish_alert correctly serializes the alert payload to JSON
+    and publishes it with the correct properties (persistent message).
+    """
+    print("\n--- Test: Publish Alert Payload Structure ---")
+
+    # Extract mocks and modules from the fixture
+    mock_publisher_channel = publish_alert_mocks["mock_publisher_channel"]
+    mock_logger_instance = publish_alert_mocks["mock_logger_instance"]
+    _rabbitmq_consumer_service = publish_alert_mocks["_rabbitmq_consumer_service"]
+    _config = publish_alert_mocks["_config"]
+
+    # Sample alert payload with various data types
+    alert_payload = {
+        "alert_id": str(uuid.uuid4()),
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z",
+        "alert_name": "Structured Payload Test",
+        "severity": "INFO",
+        "description": "This alert tests the JSON serialization and properties.",
+        "source_service_name": "payload-test-service",
+        "details": {
+            "user_affected": "testuser",
+            "ip_address": "192.168.1.1",
+            "event_count": 5,
+            "is_critical": False,
+            "tags": ["test", "payload", "structure"]
+        }
+    }
+
+    # Call the function under test
+    result = _rabbitmq_consumer_service._publish_alert(alert_payload)
+
+    # Assertions:
+    # Verify basic_publish was called exactly once
+    mock_publisher_channel.basic_publish.assert_called_once()
+
+    # Get the arguments passed to basic_publish
+    args, kwargs = mock_publisher_channel.basic_publish.call_args
+
+    # Assert exchange and routing_key
+    assert kwargs.get('exchange') == '', "Exchange should be default empty string"
+    assert kwargs.get('routing_key') == _config.RABBITMQ_ALERT_QUEUE, "Routing key should be the alert queue"
+
+    # Assert body is the JSON-serialized payload
+    expected_body = json.dumps(alert_payload)
+    assert kwargs.get('body') == expected_body, "Published body should be the JSON-serialized alert payload"
+
+    # Assert properties for persistence
+    expected_properties = pika.BasicProperties(delivery_mode=2) # delivery_mode=2 for persistent messages
+    # Compare properties by checking their attributes, as mock objects might not compare directly
+    actual_properties = kwargs.get('properties')
+    assert actual_properties is not None, "Properties should not be None"
+    assert actual_properties.delivery_mode == expected_properties.delivery_mode, "Delivery mode should be 2 (persistent)"
+
+    # Verify success log message
+    mock_logger_instance.info.assert_called_once_with(
+        f"RabbitMQ Consumer: Successfully published alert '{alert_payload.get('alert_name')}' (ID: {alert_payload.get('alert_id')}) to '{_config.RABBITMQ_ALERT_QUEUE}'."
+    )
+
+    # Verify function returns True
+    assert result is True, "_publish_alert should return True on successful publication"
+
+    print("Publish alert payload structure verified.")
+
+

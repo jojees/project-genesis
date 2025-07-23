@@ -118,6 +118,29 @@ These instructions will help you set up and run the `event-audit-dashboard` loca
 
 ---
 
+## ✅ Testing
+
+The `event-audit-dashboard` service includes a comprehensive suite of **unit tests** to ensure its robustness and correct behavior. These tests mock external dependencies, allowing for isolated and fast validation of application logic, especially concerning API interactions and error handling.
+
+### Running Tests
+
+To execute the entire test suite:
+
+```bash
+poetry run pytest
+```
+
+### Checking Code Coverage
+To generate a detailed code coverage report, including lines missed by tests:
+```bash
+poetry run pytest --cov=event_audit_dashboard --cov-report=term-missing
+```
+
+This command will output a summary to your terminal, highlighting uncovered lines. A full XML report is also generated as `coverage.xml`.
+
+Currently, the test suite provides approximately **79% line coverage** for app.py. The remaining uncovered lines typically represent less common error paths or logging statements that might not be triggered by the current test scenarios.
+
+---
 ## ☸️ Kubernetes Deployment
 
 This service is designed for deployment within a Kubernetes cluster. The base Kubernetes manifests are located in `k8s/base/event-audit-dashboard/`.
