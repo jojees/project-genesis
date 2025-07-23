@@ -160,6 +160,34 @@ These instructions will guide you through setting up and running the `notificati
 
 ---
 
+### Unit Testing
+
+This project includes a comprehensive suite of unit tests to ensure the reliability and correctness of the Notification Service components.
+
+**Current Status:**
+
+* **Overall Test Coverage:** The current test suite achieves **66% overall code coverage**.
+* **Covered Modules:** Dedicated unit tests are in place for:
+    * API Endpoints (`notification_service/api.py`)
+    * Configuration Management (`notification_service/config.py`)
+    * Logging Setup (`notification_service/logger_config.py`)
+    * PostgreSQL Service Interactions (`notification_service/postgres_service.py`)
+    * RabbitMQ Consumer Logic (`notification_service/rabbitmq_consumer.py`)
+* **Test Framework:** `pytest` is used as the primary testing framework, along with `pytest-asyncio` for asynchronous code and `pytest-cov` for coverage reporting.
+
+**Known Limitation:**
+
+* **`notification_service/main.py` Coverage:** Due to its structure as the application's entry point (which primarily executes its core logic when run directly, not when imported for testing), achieving comprehensive unit test coverage for `notification_service/main.py` has proven challenging without modifying the core application code. Efforts to test this specific module have been paused, with continued focus on ensuring robust coverage for the modular components.
+
+To run the tests and view the coverage report:
+
+```bash
+poetry run pytest
+poetry run pytest --cov=notification_service --cov-report=term-missing
+```
+
+---
+
 ## 💻 Developer Utilities & Maintenance
 
 This section contains useful commands for local development, dependency management, and testing for this service.
