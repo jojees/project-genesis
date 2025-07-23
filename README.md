@@ -3,6 +3,7 @@
 [![CI/CD Status](https://github.com/jojees/project-genesis/actions/workflows/k8s-deploy.yaml/badge.svg)](https://github.com/jojees/project-genesis/actions/workflows/k8s-deploy.yaml)
 --->
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![codecov](https://codecov.io/github/jojees/project-genesis/graph/badge.svg?token=E6244R8XGA)](https://codecov.io/github/jojees/project-genesis)
 [![Code Scanning status](https://github.com/jojees/project-genesis/actions/workflows/build-python-services.yml/badge.svg)](https://github.com/jojees/project-genesis/security/code-scanning)
 
 ---

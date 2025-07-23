@@ -104,6 +104,15 @@ jobs:
           name: coverage-report-${{ inputs.service_name }}
           path: src/${{ inputs.service_name }}/coverage.xml
 
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: src/${{ inputs.service_name }}/coverage.xml
+          disable_search: true
+          flags: unittests
+          verbose: true
+
   # Job 2: Build and Push Docker Image (depends on security scans passing)
   build-and-push:
     needs: security-scans
