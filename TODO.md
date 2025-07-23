@@ -273,8 +273,109 @@ This document tracks pending actions and improvements for our services and Kuber
 2025-07-04 20:05:26,920 - uvicorn.error - INFO - Application startup complete.
 2025-07-04 20:05:26,920 - uvicorn.error - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 ```
+* **Implement Error Handling in `notification_service/postgres_service.py`**: Add a `try...except OperationalError` block within the `fetch_all_alerts` method in `notification_service/postgres_service.py` to catch database errors, log them, and return an empty list, allowing the `test_fetch_all_alerts_handles_database_error` test in `src/notification-service/tests/test_pg_fetch_all.py` to pass.
+* **Add Default Values to `Config` Fields in `notification_service/config.py`**:
+    * **Problem**: The `Config` class in `src/notification-service/notification_service/config.py` currently defines all fields as required (`Field(...)`) without explicit default values. This prevents flexible testing scenarios where environment variables might be missing or where a fixture needs to reset values to defaults for isolated tests (e.g., using a `patch_settings` fixture).
+    * **Action**: Modify the `Config` class to provide default values for all fields. This aligns with `pydantic-settings` best practices, allowing the application to run with sensible defaults if environment variables are not explicitly set, and enabling more robust testing strategies.
+    * **Recommended Code Change (in `src/notification-service/notification_service/config.py`):**
+        ```python
+        # notification_service/notification_service/config.py
+        import os
+        from pydantic import Field
+        from pydantic_settings import BaseSettings, SettingsConfigDict
 
+        class Config(BaseSettings):
+            model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8')
 
+            # RabbitMQ Configuration
+            rabbitmq_host: str = Field("localhost", env="RABBITMQ_HOST")
+            rabbitmq_port: int = Field(5672, env="RABBITMQ_PORT")
+            rabbitmq_user: str = Field("guest", env="RABBITMQ_USER")
+            rabbitmq_pass: str = Field("guest", env="RABBITMQ_PASS")
+            rabbitmq_alert_queue: str = Field("audit_alerts", env="RABBITMQ_ALERT_QUEUE")
+
+            # PostgreSQL Configuration
+            pg_host: str = Field("localhost", env="PG_HOST")
+            pg_port: int = Field(5432, env="PG_PORT")
+            pg_db: str = Field("notification_db", env="PG_DB")
+            pg_user: str = Field("user", env="PG_USER")
+            pg_password: str = Field("password", env="PG_PASSWORD")
+
+            # Service specific
+            service_name: str = Field("notification-service", env="SERVICE_NAME")
+            environment: str = Field("development", env="ENVIRONMENT")
+
+            # Logging level
+            log_level: str = Field("INFO", env="LOG_LEVEL")
+
+            # API Configuration for Notification Service itself
+            api_host: str = Field("0.0.0.0", env="API_HOST")
+            api_port: int = Field(8000, env="API_PORT")
+
+        def load_config() -> Config:
+            return Config()
+        ```
+    * **Impact on Tests**:
+        * Once this change is made, the `patch_settings` fixture approach (which directly manipulates `Config` instance attributes, including setting them to their defaults) can be fully implemented in your tests.
+        * The current temporary patches for `pydantic_settings.sources.dotenv_values` and `os.environ` in `test_config.py` can then be removed, as the new fixture will handle the test environment setup more cleanly.
+        * This will also enable the `test_config_uses_default_values_when_env_vars_missing` test case to be properly implemented and pass.
+* **Enhanced Granular Error Handling and Logging**:
+    * Implement specific `try-except` blocks for `KeyError`, `ValueError`, and `psycopg.errors` (e.g., `DataError`, `OperationalError`, `UniqueViolation`, `IntegrityError`).
+    * Ensure consistent use of logging levels (`logger.error`, `logger.exception`, `logger.warning`) based on the severity and nature of the error.
+    * Standardize log message formats for better clarity and easier analysis.
+    * Add an info log statement to the get_alert_by_id function in src/notification-service/notification_service/api.py to log successful alert fetches.
+* **Robust Input Validation**:
+    * Implement a dedicated pre-processing/validation layer at the beginning of the `insert_alert` method.
+    * Consider using a library like Pydantic to define and validate the alert payload schema.
+* **Database Transaction and Connection Management**:
+    * Ensure explicit `await conn.rollback()` calls are made in `except` blocks for database-related errors if not automatically handled by context managers.
+    * Leverage `tenacity.retry` decorators for database calls to handle transient `OperationalError` and `InterfaceError` (or similar) gracefully.
+    * Review and optimize connection pool configuration (`min_size`, `max_size`) for expected load.
+* **Code Structure and Testability**:
+    * Adhere to the Single Responsibility Principle, ensuring `insert_alert` focuses solely on insertion.
+    * Continue using Dependency Injection for passing dependencies like logger and database pool instances.
+    * Ensure functions consistently return clear values (`True`/`False` or specific error objects) for success/failure.
+* **Refactor `RabbitMQConsumer.on_message_callback`**:
+    * Implement robust JSON decoding with `try-except json.JSONDecodeError`.
+    * Add explicit validation for `REQUIRED_FIELDS` in incoming messages.
+    * Ensure comprehensive alert payload construction, mapping incoming fields to the full database schema.
+    * Implement specific error handling for `PostgreSQLService.insert_alert` exceptions (e.g., `UniqueViolation`, generic `Exception`), logging appropriately and nacking messages with `requeue=False` when data is malformed or duplicate.
+* **API: Handle Invalid UUID Format for** `/alerts/<alert_id>`:
+    * **Problem**: The `/alerts/<alert_id>` endpoint currently returns a 404 Not Found for invalid UUID formats, as the `PostgreSQLService` handles the `ValueError` internally and returns `None`.
+    * **Action**: Modify the `get_alert_by_id` function in `src/notification-service/notification_service/api.py` to explicitly validate the `alert_id` format before calling `pg_service.fetch_alert_by_id`. If the format is invalid, return a 400 Bad Request.
+    * **Recommended Code Change (in** `src/notification-service/notification_service/api.py`**)**:
+    ```python
+    import uuid # Add this import
+    # ... other imports ...
+
+    @app.route('/alerts/<alert_id>', methods=['GET'])
+    async def get_alert_by_id(alert_id: str):
+        """API endpoint to fetch a single alert by ID from PostgreSQL."""
+        try:
+            # Add UUID format validation here
+            try:
+                uuid.UUID(alert_id)
+            except ValueError:
+                logger.error(f"API: Invalid alert ID format received: '{alert_id}'.")
+                return jsonify({"error": f"Invalid alert ID format: '{alert_id}'. Must be a valid UUID."}), 400
+
+            if not pg_service:
+                logger.error("PostgreSQLService not initialized for API. Cannot fetch specific alert.")
+                return jsonify({"error": "Service not ready to fetch specific alert"}), 503
+
+            alert_data = await pg_service.fetch_alert_by_id(alert_id)
+            if alert_data:
+                logger.info(f"API: Successfully fetched alert with ID: {alert_id}.")
+                return jsonify(alert_data), 200
+            else:
+                logger.info(f"API: Alert with ID: {alert_id} not found.")
+                return jsonify({"message": "Alert not found"}), 404
+        except Exception as e:
+            logger.error(f"Error fetching alert by ID '{alert_id}' via API: {e}", exc_info=True)
+            return jsonify({"error": "Failed to retrieve alert by ID", "details": str(e)}), 500
+
+    ```
+    * **Impact on Tests**: Once this change is applied to `api.py`, the `test_alerts_by_id_endpoint_handles_invalid_uuid_format` test in `tests/test_api_alert_id.py` should be reverted to expect a 400 status code and the specific "Invalid alert ID format" error message.
 ### General Application Improvements
 
 * **Dynamic Logging Level Change**: Make it possible to change the application's logging level (e.g., from `info` to `debug`) without requiring a new application deployment.
@@ -308,6 +409,113 @@ This document tracks pending actions and improvements for our services and Kuber
 
 * **Create GitHub Issues for all `TODO.md` entries**: Go through the `TODO.md` file and create a dedicated GitHub Issue for each individual activity or enhancement listed. Assign appropriate labels (e.g., `enhancement`, `bug`, `documentation`, `devsecops`), assignees, and project board associations to each issue. This will allow for better tracking, prioritization, and collaboration on all pending tasks.
 * **Transition to 'git clean -fdX' for cleanup.**: This will require ensuring that all files and directories intended for cleanup (like __pycache__, .pytest_cache, bandit_results.json, coverage.xml, .coverage, .env, .python-version) are correctly listed and ignored in the .gitignore file.
+
+---
+
+## PostgreSQL Service Improvements
+
+### Code Improvements & Design Principles
+
+* **Refactor Module-Level Dependencies for Testability**:
+    * **Purpose**: Reduce tight coupling and simplify mocking in tests by making dependencies explicit.
+    * **Action**:
+        * Modify `PostgreSQLService.__init__` to accept `logger` and the `AsyncConnectionPool` *class* (or a factory function for it) as arguments.
+        * Update `initialize_pool` and other methods to use the injected `logger` and `AsyncConnectionPool` instance.
+        * Remove direct module-level imports of `logger` and `AsyncConnectionPool` within `postgres_service.py` if they are to be injected.
+    * **Benefit**: Enhances testability, flexibility, and reusability of the `PostgreSQLService` class.
+
+* **Centralize Database Error Handling**:
+    * **Purpose**: Reduce boilerplate and ensure consistent error handling, logging, and retry logic across all database operations.
+    * **Action**:
+        * Consider implementing a custom asynchronous context manager or a decorator (e.g., `@handle_db_errors`) that wraps database interaction methods.
+        * This wrapper should include `try-except` blocks for `OperationalError`, `UniqueViolation`, and general `Exception`, performing appropriate logging and `rollback()`/`commit()` actions.
+    * **Benefit**: Cleaner code, consistent error reporting, and simplified future additions of database operations.
+
+### Feature Enhancements for `PostgreSQLService`
+
+* **Implement Comprehensive CRUD Operations for Alerts**:
+    * **Purpose**: Provide a complete data access layer for managing alert records.
+    * **Action**:
+        * Add `async def insert_alert(self, alert_data: dict) -> uuid.UUID`: For persisting new alerts.
+        * Add `async def get_alert(self, alert_id: uuid.UUID) -> Optional[dict]`: To retrieve a specific alert by its ID.
+        * Add `async def get_alerts(self, filters: Optional[dict] = None, limit: int = 100, offset: int = 0) -> List[dict]`: For flexible querying with optional filtering (e.g., by `severity`, `alert_type`, `timestamp` range).
+        * Add `async def update_alert_status(self, alert_id: uuid.UUID, new_status: str) -> bool`: To modify specific fields like an alert's status.
+        * Add `async def delete_alert(self, alert_id: uuid.UUID) -> bool`: For soft or hard deletion of alerts (consider soft deletion for auditability).
+    * **Benefit**: Extends the service's functionality, making it a more complete data repository for alerts.
+
+* **Add Batch Operations**:
+    * **Purpose**: Improve performance for high-volume data ingestion by reducing network overhead.
+    * **Action**:
+        * Implement `async def insert_many_alerts(self, alerts_data: List[dict]) -> bool`: For inserting multiple alert payloads in a single transaction.
+    * **Benefit**: Enhances efficiency and throughput for alert processing.
+
+* **Implement Connection Health Check**:
+    * **Purpose**: Provide a dedicated mechanism for external services (e.g., health probes in Kubernetes) to check database connectivity without triggering full initialization.
+    * **Action**:
+        * Create `async def is_connected(self) -> bool`: This method should perform a lightweight query (e.g., `SELECT 1`) to verify active connection pool health.
+    * **Benefit**: Enables robust health monitoring for the service in a production environment.
+
+### SQL Handling & Database Migrations (DevOps Perspective)
+
+* **Adopt a Dedicated Database Migration Tool (High Priority)**:
+    * **Problem**: Current schema creation logic is embedded in application code, making schema evolution, version control, and deployment challenging.
+    * **Action**:
+        * **Research and Select**: Choose a Python-compatible database migration tool (e.g., **Alembic** for SQLAlchemy, or consider **Flyway/Liquibase** if you need language-agnostic capabilities for a polyglot environment).
+        * **Extract Schema**: Move the `CREATE TABLE` and `CREATE INDEX` SQL statements from `_create_alerts_table` into initial migration scripts managed by the chosen tool.
+        * **Refactor `_create_alerts_table`**: Modify `_create_alerts_table` (or remove it if `initialize_pool` no longer needs to call it) to simply ensure the pool is open, as schema management will be external.
+        * **Integrate into CI/CD**: Ensure migration scripts are run as part of your deployment pipeline (e.g., `alembic upgrade head` before starting the application service).
+    * **Benefit**: Version-controlled schema, idempotent deployments, easier rollbacks, improved collaboration, and robust CI/CD integration.
+
+* **Externalize SQL Statements into Separate Files**:
+    * **Purpose**: Improve readability, maintainability, and allow SQL to be managed by database-focused tools.
+    * **Action**:
+        * Create a `sql/` directory within your project.
+        * Move complex SQL queries (e.g., `CREATE TABLE`, `INSERT`, `SELECT` statements) into individual `.sql` files.
+        * Modify your Python code to read these `.sql` files at runtime (e.g., `with open('sql/create_alerts_table.sql') as f: sql = f.read()`).
+    * **Benefit**: Clear separation of concerns, easier SQL review, and potential for static analysis of SQL.
+
+* **Maintain Idempotent SQL Practices**:
+    * **Purpose**: Ensure that SQL commands can be run multiple times without causing errors or unintended side effects.
+    * **Action**: Continue using `IF NOT EXISTS` for table and index creation. For future schema changes, ensure migration scripts are designed to be idempotent.
+    * **Benefit**: Robustness during deployments and recovery scenarios.
+    
+### Application Robustness & Maintainability (DevOps Perspective)
+
+* **Implement Granular Exception Handling (High Priority)**:
+    * **Problem**: The current `insert_alert` method uses a broad `except Exception` block. This catches all errors generically, making it difficult to distinguish between different failure modes (e.g., missing data, invalid data format, database connection issues, unique constraint violations). This obscures the root cause in logs and prevents specific, targeted responses.
+    * **Action**:
+        * **Refactor `insert_alert`**: Introduce specific `try-except` blocks to catch anticipated exceptions:
+            * `KeyError`: For missing mandatory fields in the `alert_payload` dictionary.
+            * `ValueError`: For invalid data types or formats (e.g., non-UUID string for `alert_id`, malformed timestamp).
+            * `psycopg.errors.UniqueViolation`: For duplicate `alert_id` insertions.
+            * `psycopg.errors.DataError`, `psycopg.errors.OperationalError`, `psycopg.errors.IntegrityError`: For various database-related issues during query execution.
+        * **Adjust Logging**: Ensure each specific `except` block logs with an appropriate level (`logger.error`, `logger.warning`, `logger.exception`) and a descriptive message that pinpoints the exact issue. Reserve `logger.exception` for truly unexpected or unhandled errors where a full traceback is critical.
+    * **Benefit**: Clearer error identification, faster debugging, more precise application responses to different failure types, and improved log analysis.
+
+* **Enforce Robust Input Validation (High Priority)**:
+    * **Problem**: Data inconsistencies or missing critical fields in the incoming `alert_payload` can lead to runtime errors or silent data corruption if not caught early. Relying solely on database constraints for validation pushes errors downstream.
+    * **Action**:
+        * **Adopt a Validation Library**: Integrate a data validation library, such as **Pydantic**, at the entry point of your alert processing.
+        * **Define Schema**: Create a Pydantic `BaseModel` that strictly defines the expected structure, data types, and optionality of all fields in the `alert_payload`. Pydantic can automatically handle type coercion (e.g., string to `uuid.UUID`, ISO string to `datetime.datetime`, string to `ipaddress.IPv4Address`).
+        * **Validate Early**: Call `AlertPayload(**alert_payload_dict)` immediately upon receiving the payload. Catch `pydantic.ValidationError` to log and reject malformed inputs before any database interaction.
+        * **Update Data Access**: After validation, use the validated Pydantic model's attributes (e.g., `validated_payload.alert_id`) directly, as they will be correctly typed and present.
+    * **Benefit**: Prevents invalid data from reaching the database, improves data integrity, provides clear and immediate feedback on malformed inputs, reduces boilerplate validation code, and enhances code readability.
+
+* **Refine Database Transaction Management (Medium Priority)**:
+    * **Problem**: The current `insert_alert` might not explicitly handle `rollback` for all database error scenarios, potentially leaving transactions open or in an undefined state, even if the `async with` context manager attempts to clean up.
+    * **Action**:
+        * **Explicit Rollback Review**: While `async with self.pool.connection()` often handles implicit rollback on exceptions, explicitly add `await conn.rollback()` within specific database error `except` blocks (`DataError`, `OperationalError`, `IntegrityError`) to ensure transactions are always cleanly aborted in case of failure. This makes the intent explicit and guards against subtle context manager behaviors.
+        * **Implement Retry Logic for Transient Errors**: Wrap database calls that are prone to transient failures (e.g., network glitches, temporary database unavailability) with a retry mechanism using a library like **Tenacity**.
+            * **Example**: Apply `@retry` decorators with `wait_exponential` and `stop_after_attempt`, specifically retrying on exceptions like `psycopg.errors.OperationalError` or `psycopg.errors.InterfaceError`.
+    * **Benefit**: Ensures database consistency, prevents resource leaks from unclosed transactions, improves application resilience to transient database issues, and reduces manual intervention during outages.
+
+* **Optimize Code Structure for Testability & Clarity (Low Priority)**:
+    * **Problem**: While the current tests are effective, continuous adjustments indicate that the application's `insert_alert` method might still be performing too many distinct responsibilities (validation, data transformation, database interaction, error handling, logging) within a single function.
+    * **Action**:
+        * **Adhere to Single Responsibility Principle**: Consider further refactoring `insert_alert` to delegate specific tasks to smaller, focused helper methods or classes. For example, a dedicated `AlertTransformer` could handle data type conversions and JSON serialization/deserialization, separating it from the core database insertion logic.
+        * **Dependency Injection Consistency**: Continue to ensure that external dependencies (like the logger and the database connection pool) are injected rather than being globally imported or instantiated within methods. This makes components more modular and easier to mock.
+        * **Clear Function Signatures and Return Values**: Ensure that function signatures clearly indicate expected inputs and outputs. Consistent return values (e.g., always `True`/`False` for success/failure, or returning a specific result object on success and `None` or raising a custom exception on failure) simplify calling code.
+    * **Benefit**: Improves code readability, makes individual components easier to understand and maintain, enhances testability by allowing more granular mocking, and promotes a more scalable architecture.
 
 ---
 
