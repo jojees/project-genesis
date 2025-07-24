@@ -5,10 +5,7 @@ import importlib
 from pydantic import ValidationError # Import ValidationError for testing
 from pydantic_settings import BaseSettings # Import BaseSettings to patch its internal method
 import dotenv # Import dotenv to correctly patch dotenv_values
-
-
-# No longer relying on mock_env_vars fixture from conftest.py,
-# managing env vars directly within each test.
+import sys # Import sys to manipulate sys.modules
 
 def test_config_loads_all_env_vars_correctly():
     """
@@ -16,6 +13,19 @@ def test_config_loads_all_env_vars_correctly():
     and that their values match the mocked environment variables.
     """
     print("\n--- Test: Config Loads All Environment Variables Correctly ---")
+
+    # CRITICAL: Stop all active patches from conftest.py for this test
+    # This allows us to control the environment explicitly for this test.
+    mock.patch.stopall()
+
+    # IMPORTANT: Delete the module from sys.modules to force a fresh import
+    # This ensures the module is loaded without any global patches applied.
+    if 'notification_service.config' in sys.modules:
+        del sys.modules['notification_service.config']
+    # Also clear logger_config if it was imported and instantiated Config
+    if 'notification_service.logger_config' in sys.modules:
+        del sys.modules['notification_service.logger_config']
+
 
     mock_env = {
         "RABBITMQ_HOST": "mock_rabbitmq_host",
@@ -79,6 +89,15 @@ def test_config_parses_data_types_correctly():
     """
     print("\n--- Test: Config Parses Data Types Correctly ---")
 
+    # CRITICAL: Stop all active patches from conftest.py for this test
+    mock.patch.stopall()
+
+    # IMPORTANT: Delete the module from sys.modules to force a fresh import
+    if 'notification_service.config' in sys.modules:
+        del sys.modules['notification_service.config']
+    if 'notification_service.logger_config' in sys.modules:
+        del sys.modules['notification_service.logger_config']
+
     # Define environment variables with string values that should be parsed
     mock_env = {
         "RABBITMQ_HOST": "another_host",
@@ -135,6 +154,15 @@ def test_config_validation_for_invalid_types():
     are provided with values that cannot be parsed into their specified data types.
     """
     print("\n--- Test: Config Validation for Invalid Types ---")
+
+    # CRITICAL: Stop all active patches from conftest.py for this test
+    mock.patch.stopall()
+
+    # IMPORTANT: Delete the module from sys.modules to force a fresh import
+    if 'notification_service.config' in sys.modules:
+        del sys.modules['notification_service.config']
+    if 'notification_service.logger_config' in sys.modules:
+        del sys.modules['notification_service.logger_config']
 
     # Define environment variables with invalid types for integer fields
     mock_env = {

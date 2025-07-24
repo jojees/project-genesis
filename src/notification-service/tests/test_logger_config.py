@@ -3,10 +3,7 @@ import unittest.mock as mock
 import os
 import importlib
 import logging
-import sys
-
-# Ensure the conftest.py's reset_modules_for_tests fixture is active
-# to provide a clean environment for each test.
+import sys # Import sys to manipulate sys.modules
 
 def test_logger_configuration_level_and_handler():
     """
@@ -14,6 +11,16 @@ def test_logger_configuration_level_and_handler():
     has a StreamHandler, and has propagate set to False.
     """
     print("\n--- Test: Logger Configuration Level and Handler ---")
+
+    # CRITICAL: Stop all active patches from conftest.py for this test
+    mock.patch.stopall()
+
+    # IMPORTANT: Delete the module from sys.modules to force a fresh import
+    if 'notification_service.logger_config' in sys.modules:
+        del sys.modules['notification_service.logger_config']
+    if 'notification_service.config' in sys.modules: # logger_config imports config
+        del sys.modules['notification_service.config']
+
 
     mock_log_level = "DEBUG"
     mock_env = {
@@ -34,6 +41,7 @@ def test_logger_configuration_level_and_handler():
         "API_PORT": "1234",
     }
 
+    # --- Define mocks BEFORE the patch context manager ---
     # Create a mock for sys.stdout
     mock_stdout = mock.Mock(spec=sys.stdout)
 
@@ -44,19 +52,22 @@ def test_logger_configuration_level_and_handler():
     # Also mock its setLevel method if the app calls it on the handler
     mock_stream_handler_instance.setLevel = mock.Mock()
 
+    # Create a mock for the logging.Logger instance (app logger)
+    mock_app_logger = mock.Mock(spec=logging.Logger)
+    mock_app_logger.addHandler = mock.Mock()
+    mock_app_logger.setLevel = mock.Mock()
+    mock_app_logger.propagate = False
+    mock_app_logger.handlers = [] # Ensure this exists for the app's check
 
-    # Create a mock for the logging.Logger instance
-    mock_logger_instance = mock.Mock(spec=logging.Logger)
-    mock_logger_instance.addHandler = mock.Mock()
-    mock_logger_instance.setLevel = mock.Mock()
-    mock_logger_instance.propagate = False
-    mock_logger_instance.handlers = [] # Ensure this exists for the app's check
+    # Create a mock for the root logger (needed for the side_effect)
+    mock_root_logger = mock.Mock(spec=logging.Logger)
+    mock_root_logger.handlers = [] # Ensure it has a handlers attribute
 
     # Patch os.environ, dotenv functions, logging.getLogger, and logging.StreamHandler
     with mock.patch.dict(os.environ, mock_env, clear=True), \
          mock.patch('dotenv.load_dotenv', return_value=True), \
          mock.patch('dotenv.find_dotenv', return_value=None), \
-         mock.patch('logging.getLogger', return_value=mock_logger_instance), \
+         mock.patch('logging.getLogger', side_effect=lambda name: mock_root_logger if name == 'root' else mock_app_logger), \
          mock.patch('logging.StreamHandler', return_value=mock_stream_handler_instance): # Patch StreamHandler class to return our specific instance
         
         # Import the logger_config module.
@@ -65,13 +76,13 @@ def test_logger_configuration_level_and_handler():
         logger = _logger_config_module.logger
 
         # Assert logging level was set on the mock logger
-        mock_logger_instance.setLevel.assert_called_once_with(logging.DEBUG)
+        mock_app_logger.setLevel.assert_called_once_with(logging.DEBUG)
 
         # Assert that addHandler was called exactly once
-        mock_logger_instance.addHandler.assert_called_once()
+        mock_app_logger.addHandler.assert_called_once()
         
         # Get the handler that was added (should be our mock_stream_handler_instance)
-        added_handler = mock_logger_instance.addHandler.call_args[0][0]
+        added_handler = mock_app_logger.addHandler.call_args[0][0]
 
         # Assert that the added handler is indeed our mock instance
         assert added_handler is mock_stream_handler_instance, "The added handler should be our mocked StreamHandler instance"
@@ -91,6 +102,15 @@ def test_logger_propagate_false_prevents_duplicate_logs():
     log messages do not propagate to the root logger.
     """
     print("\n--- Test: Logger Propagate False Prevents Duplicate Logs ---")
+
+    # CRITICAL: Stop all active patches from conftest.py for this test
+    mock.patch.stopall()
+
+    # IMPORTANT: Delete the module from sys.modules to force a fresh import
+    if 'notification_service.logger_config' in sys.modules:
+        del sys.modules['notification_service.logger_config']
+    if 'notification_service.config' in sys.modules: # logger_config imports config
+        del sys.modules['notification_service.config']
 
     mock_log_level = "INFO"
     mock_env = {
@@ -141,4 +161,3 @@ def test_logger_propagate_false_prevents_duplicate_logs():
         assert len(captured_root_logs) == 0, "No messages should have propagated to the root logger"
 
     print("Logger propagate=False successfully prevented duplicate logs verified.")
-
