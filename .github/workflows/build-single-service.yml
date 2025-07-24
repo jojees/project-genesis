@@ -7,6 +7,10 @@ on:
         description: 'The name of the service (e.g., event-audit-dashboard)'
         required: true
         type: string
+      service_module_name:
+        description: 'The internal Python module or directory for coverage (e.g., audit_analysis or .)'
+        required: true
+        type: string
       docker_org:
         description: 'Docker Hub username or organization'
         required: true
@@ -42,6 +46,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install service dependencies
+        working-directory: src/${{ inputs.service_name }}
+        run: poetry install --no-root
 
       - name: Install Bandit
         run: |
@@ -80,6 +91,27 @@ jobs:
           sarif_file: trivy-dependency-results_${{ inputs.service_name }}.sarif
           wait-for-processing: true
           category: ${{ inputs.service_name }}-trivy-dependency-scan
+
+      - name: Run Unit and Integration Tests
+        working-directory: src/${{ inputs.service_name }}
+        run: |
+          poetry run pytest --cov=${{ inputs.service_module_name }} --cov-report=xml:coverage.xml --cov-report=term-missing
+
+      - name: Upload Test Coverage Report
+        uses: actions/upload-artifact@v4
+        if: always() # Upload even if tests fail, useful for debugging
+        with:
+          name: coverage-report-${{ inputs.service_name }}
+          path: src/${{ inputs.service_name }}/coverage.xml
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: src/${{ inputs.service_name }}/coverage.xml
+          disable_search: true
+          flags: unittests
+          verbose: true
 
   # Job 2: Build and Push Docker Image (depends on security scans passing)
   build-and-push:
