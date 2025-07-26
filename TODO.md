@@ -589,3 +589,47 @@ This document tracks pending actions and improvements for our services and Kuber
     * **Details**: These tests will be more complex to set up (involving multiple running services and their dependencies) and should be fewer in number, possibly run less frequently than component/contract tests due to their longer execution time.
 
 ---
+
+## Ansible To-Do List
+
+### 1. Complete Role Structure
+- [ ] Add `handlers/main.yaml` to existing roles for service restarts, etc.
+- [ ] Create `templates/` directory for configuration files (e.g., K3s config, app config).
+- [ ] Create `files/` directory for static files (e.g., scripts, binaries).
+- [ ] Implement `defaults/main.yaml` in roles for default variables.
+- [ ] Consider `vars/main.yaml` for internal role variables if needed.
+- [ ] Add `meta/main.yaml` for role metadata and dependencies.
+
+### 2. Advanced Inventory Management
+- [ ] Explore Dynamic Inventory for scaling beyond static hosts.
+- [ ] Structure inventories for multiple environments (e.g., `inventory/production.ini`, `inventory/staging.ini`).
+
+### 3. Comprehensive Variable Management
+- [ ] Utilize `host_vars/` for host-specific variables.
+- [ ] Organize `group_vars` by environment for better separation.
+- [ ] Review Ansible's variable precedence for clarity.
+
+### 4. Testing and Validation
+- [ ] Integrate `ansible-lint` for playbook and role linting.
+- [ ] Adopt Molecule for comprehensive role testing (unit, integration, idempotency).
+- [ ] Implement regular idempotency checks for all playbooks.
+
+### 5. CI/CD Integration
+- [ ] Create simple wrapper scripts for common `ansible-playbook` commands.
+- [ ] Integrate Ansible playbooks into your CI/CD pipeline (e.g., GitHub Actions, Jenkins).
+- [ ] Implement secure management of Ansible Vault passwords within CI/CD.
+
+### 6. Error Handling & Reporting
+- [ ] Utilize `block`, `rescue`, and `always` for robust error handling.
+- [ ] Define `failed_when` and `changed_when` for custom task status.
+- [ ] Set up notifications (e.g., Slack, email) for playbook failures.
+
+### 7. Performance & Scaling
+- [ ] Optimize `ansible.cfg` (e.g., `forks`, `pipelining`, `fact_caching`).
+- [ ] Consider different execution `strategy` plugins (e.g., `free`).
+
+### 8. Documentation
+- [ ] Create `README.md` files for the overall Ansible project and individual roles.
+- [ ] Add inline comments in playbooks and tasks for complex logic.
+
+---

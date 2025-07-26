@@ -1,0 +1,117 @@
+# infra/ansible/deploy_github_runner.yaml
+---
+- name: Deploy GitHub Actions Runner to K3s Cluster
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    k8s_manifests_path: "{{ playbook_dir }}/../kubernetes/github-runner"
+    kubeconfig_path: "{{ lookup('env', 'HOME') }}/.kube/config"
+
+  tasks:
+    - name: Ensure Kubernetes namespace for GitHub Runner exists
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ k8s_manifests_path }}/namespace.yaml"
+        kubeconfig: "{{ kubeconfig_path }}"
+
+    - name: Apply Service Account for GitHub Runner
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ k8s_manifests_path }}/serviceaccount.yaml"
+        kubeconfig: "{{ kubeconfig_path }}"
+
+    - name: Apply ClusterRole for GitHub Runner
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ k8s_manifests_path }}/clusterrole.yaml"
+        kubeconfig: "{{ kubeconfig_path }}"
+
+    - name: Apply ClusterRoleBinding for GitHub Runner
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ k8s_manifests_path }}/clusterrolebinding.yaml"
+        kubeconfig: "{{ kubeconfig_path }}"
+
+    - name: Apply GitHub Runner Secret
+      kubernetes.core.k8s:
+        state: present
+        definition: |
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: github-runner-secret
+            namespace: github-runner
+          type: Opaque
+          data:
+            GITHUB_RUNNER_TOKEN: "{{ github_runner_registration_token | b64encode }}" # Base64 encode the token
+        kubeconfig: "{{ kubeconfig_path }}"
+
+    - name: Apply GitHub Runner Persistent Volume Claim (PVC)
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ k8s_manifests_path }}/github-runner-pvc.yaml"
+        kubeconfig: "{{ kubeconfig_path }}"
+
+    - name: Apply GitHub Runner Deployment
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ k8s_manifests_path }}/deployment.yaml"
+        kubeconfig: "{{ kubeconfig_path }}"
+
+    - name: Wait for GitHub Runner Deployment to be ready
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: github-runner-deployment
+        namespace: github-runner
+        kubeconfig: "{{ kubeconfig_path }}"
+      register: deploy_info
+      until:
+        - deploy_info.resources is defined and deploy_info.resources | length > 0
+        - deploy_info.resources[0].status is defined
+        - deploy_info.resources[0].status.availableReplicas is defined
+        - (deploy_info.resources[0].status.availableReplicas | default(0) | int) == (deploy_info.resources[0].status.replicas | default(1) | int)
+      retries: 6
+      delay: 10
+
+    - name: Debug deploy_info
+      debug:
+        var: deploy_info
+      when: deploy_info.failed is defined and deploy_info.failed
+
+    - name: Display GitHub Runner Pods
+      ansible.builtin.shell: |
+        kubectl get pods -n github-runner -o wide --kubeconfig {{ kubeconfig_path }}
+      register: github_runner_pods
+      changed_when: false
+    - debug:
+        var: github_runner_pods.stdout_lines
+
+    - name: Get GitHub Runner Status from API
+      ansible.builtin.uri:
+        url: "https://api.github.com/repos/{{ github_owner }}/{{ github_repo }}/actions/runners"
+        method: GET
+        headers:
+          Authorization: "token {{ github_pat }}"
+          Accept: "application/vnd.github+json"
+        status_code: 200
+        return_content: true
+        body_format: json
+      register: github_runners_api_response
+
+    - name: Debug GitHub Runner API Response (optional, for troubleshooting)
+      ansible.builtin.debug:
+        var: github_runners_api_response.json
+
+    - name: Verify GitHub Runner is Online and Idle
+      ansible.builtin.assert:
+        that:
+          - github_runners_api_response.json.runners is defined
+          - github_runners_api_response.json.runners | length > 0
+          - github_runners_api_response.json.runners | selectattr('name', 'match', '^github-runner-deployment-.*') | list | length == 1
+          - (github_runners_api_response.json.runners | selectattr('name', 'match', '^github-runner-deployment-.*') | first).status == 'online'
+          - not (github_runners_api_response.json.runners | selectattr('name', 'match', '^github-runner-deployment-.*') | first).busy
+        fail_msg: "GitHub Actions Runner 'github-runner-deployment' is not online or is busy."
+        success_msg: "GitHub Actions Runner 'github-runner-deployment' is online and idle!"

@@ -2,7 +2,7 @@
 
 ## Project Summary
 
-**Project Genesis** is a comprehensive, hands-on learning initiative designed to build and manage a multi-service application within a modern **DevOps ecosystem**. It serves as a real-world sandbox demonstrating best practices across **DevOps, Site Reliability Engineering (SRE), DevSecOps, and FinDevOps**. The core application, the **AuditFlow Platform**, is orchestrated on a **Kubernetes (K3s)** cluster, showcasing the entire software delivery lifecycle from infrastructure provisioning to application deployment and ongoing operations, all managed as code.
+**Project Genesis** is a comprehensive, hands-on learning initiative designed to build and manage a multi-service application within a modern **DevOps ecosystem**. It serves as a real-world sandbox demonstrating best practices across **DevOps, Site Reliability Engineering (SRE), DevSecOps, and FinDevOps**. The core application, the **AuditFlow Platform**, is orchestrated on a **Kubernetes (K3s)** cluster, showcasing the entire software delivery lifecycle from infrastructure provisioning and **full lifecycle management of self-hosted runners** to application deployment and ongoing operations, all managed as code.
 
 ---
 
@@ -10,7 +10,7 @@
 
 The primary goals of Project Genesis are to provide practical experience in:
 * Designing and deploying the **AuditFlow Platform** in a Kubernetes environment.
-* Implementing **Infrastructure as Code (IaC)** for consistent and automated infrastructure provisioning.
+* Implementing **Infrastructure as Code (IaC)** for consistent and automated infrastructure provisioning, including full lifecycle management of critical components.
 * Building robust **CI/CD pipelines** for continuous integration and delivery.
 * Managing Kubernetes resources effectively using **Helm and Kustomize**.
 * Integrating **testing and code quality** into the development workflow.
@@ -27,7 +27,7 @@ The primary goals of Project Genesis are to provide practical experience in:
 * **Docker**: Containerization platform.
 * **GitHub Actions**: CI/CD automation.
 * **Terraform**: Infrastructure as Code for provisioning.
-* **Ansible**: Configuration management and K3s cluster setup.
+* **Ansible**: Configuration management, K3s cluster setup, and **full lifecycle management of GitHub Actions runners including API interaction**.
 * **Helm**: Kubernetes package manager.
 * **Kustomize**: Kubernetes configuration customization.
 * **Pytest**: Python testing framework.
@@ -47,6 +47,15 @@ The primary goals of Project Genesis are to provide practical experience in:
 * **Databases/Messaging:** PostgreSQL (persistent data), RabbitMQ (message broker), Redis (caching/temporary data)
 * **Security Tools:** Bandit (SAST), Trivy (SCA)
 * **Monitoring (Planned/Integrated):** Prometheus, Grafana
+
+---
+
+### Infrastructure as Code (IaC) Tools
+* **Ansible:** The primary IaC tool. It is responsible for:
+    * Initial provisioning and configuration of Raspberry Pi hosts for K3s.
+    * Installation and setup of K3s master and worker components.
+    * Deployment of the self-hosted GitHub Actions runner *as Kubernetes manifests* into the K3s cluster.
+    * **Full Lifecycle Management**: Ansible handles the complete lifecycle of the self-hosted GitHub Actions runner, including **initial deployment, updates, pre-deployment cleanup (deleting old runners from both K8s and GitHub's API), and post-deployment verification of its 'online' and 'idle' status directly via the GitHub API.**
 
 ---
 
@@ -112,7 +121,7 @@ The project emphasizes Infrastructure as Code (IaC) and automated deployments. K
 2.  **Infrastructure Provisioning:**
     * Review and adjust **Terraform configurations** in `infra/terraform/`.
     * Initialize and apply Terraform: `terraform init`, `terraform plan`, `terraform apply -auto-approve`.
-    * Configure the **K3s cluster** on provisioned nodes using **Ansible** (update `infra/ansible/inventory/hosts.ini` and run `ansible-playbook -i inventory/hosts.ini playbooks/setup-k3s.yaml`).
+    * Configure the **K3s cluster** on provisioned nodes using **Ansible**, and **deploy/manage the self-hosted GitHub Actions runner**: `ansible-playbook -i infra/ansible/inventory.ini infra/ansible/homelab.yaml` followed by `ansible-playbook -i infra/ansible/inventory.ini infra/ansible/deploy_github_runner.yaml`.
 3.  **Application Deployment:**
     * **Docker Images:** Built and pushed automatically to Docker Hub via GitHub Actions.
     * **Kubernetes Deployment:** Deploy the AuditFlow Platform using **Helm**. Navigate to the main Helm chart directory (e.g., `k8s/charts/events-app`), update dependencies (`helm dependency update`), and install (`helm install auditflow-platform . --namespace auditflow-platform --create-namespace -f values.yaml`).
@@ -153,7 +162,7 @@ Services communicate primarily via **RabbitMQ**, enabling a decoupled and scalab
 * **`notification-service` (Python Microservice):** Subscribes to specific event streams from RabbitMQ or listens for triggers from the `audit-log-analysis` service, sending out notifications (e.g., email, alerts) based on defined rules. It interacts with Postgres for notification-related data.
 * **`k8s/base`:** Contains the foundational Kubernetes YAML manifests for each service and infrastructure component (Postgres, RabbitMQ, Redis). These define Deployments, Services, StatefulSets, and PVCs.
 * **`infra/terraform`:** Holds Terraform configurations to provision the underlying cloud infrastructure (e.g., VMs for K3s nodes) required for the Kubernetes cluster.
-* **`infra/ansible`:** Contains Ansible playbooks to automate the installation and configuration of the K3s cluster on the provisioned infrastructure.
+* **`infra/ansible`:** Contains Ansible playbooks to automate the installation and configuration of the K3s cluster on the provisioned infrastructure, **including the full lifecycle management of the self-hosted GitHub Actions runner.**
 * **`docs/`:** Comprehensive documentation covering architecture, DevOps pillars, setup guides, and more.
 
 ---
@@ -193,7 +202,7 @@ gunicorn==20.1.0
 **Common scripts (conceptual, based on README.md and project structure):**
 
 * `terraform init/plan/apply`: For infrastructure provisioning (infra/terraform).
-* `ansible-playbook`: For K3s cluster setup (infra/ansible).
+* `ansible-playbook`: For K3s cluster setup and **GitHub Actions runner lifecycle management** (infra/ansible).
 * `docker build/push`: For building and pushing service images (automated via GitHub Actions).
 * `helm install/upgrade`: For deploying applications to Kubernetes (k8s/charts).
 * `pytest`: For running unit/integration tests within src/*/tests/.
