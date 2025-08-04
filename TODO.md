@@ -9,12 +9,6 @@ This document tracks pending actions and improvements for our services and Kuber
 * **Add new storage class to Kubernetes**: Investigate and implement a new storage class. (You can check current options with `kubectl get storageclass`).
 * **Implement MetalLB**: Configure MetalLB for defining load balancers in the Kubernetes cluster.
 * **Utilize Ingress in Kubernetes**: Set up and use Ingress for external access to services.
-* **Address Pod Termination Issues**: Investigate and fix why pods enter an `Error` state during termination. For example:
-    ```
-    NAME                                       READY   STATUS        RESTARTS   AGE
-    audit-log-analysis-68ccd4f645-pbbmw        0/1     Terminating   0          16m
-    audit-log-analysis-68ccd4f645-pbbmw        0/1     Error         0          17m
-    ```
 * **Understand Kubernetes Resource `limits` vs. `requests`**: Clarify the difference between `limits` and `requests` in `deployment.yaml` for `cpu` and `memory` resources.
     ```yaml
     resources:
@@ -27,6 +21,10 @@ This document tracks pending actions and improvements for our services and Kuber
     ```
 * **Standardize Pod Naming Convention**: Investigate and implement a consistent naming convention for Kubernetes pods. Currently, pod names exhibit varying patterns, including random strings and multiple random strings (e.g., audit-event-generator-7f755ddfd5-xjw8t, postgres-0, rabbitmq-54657c4cf7-fn6l8). Establishing a clear and predictable naming standard will improve readability, debugging, and overall cluster management.
 * **Understand Kubernetes API Resources**: Explore and gain a deeper understanding of the various resource types available in Kubernetes, as listed by the kubectl api-resources command. This includes familiarizing oneself with their purpose, how they relate to each other, and their role in managing applications and infrastructure within the cluster.
+* **Secure Kubernetes Secrets/Tokens**: Address the practice of hardcoding secrets and tokens directly into Kubernetes manifests and Helm charts. This is a security risk. Develop and implement a secure method for managing and injecting credentials into the cluster.
+    * **Action**: Investigate and implement a solution like **Kubernetes Secrets** for storing sensitive data.
+    * **Alternative/Enhanced Action**: For more advanced and robust security, explore integrating a dedicated secrets management tool like **Vault by HashiCorp** or **Azure Key Vault** with Kubernetes. This would allow for centralized secret management, dynamic secret generation, and stricter access controls.
+    * **Implementation**: Update all relevant Helm charts and manifests to reference these secure secrets rather than containing the sensitive information directly.
 
 * **Review and Manage Old Deployments and ReplicaSets**: Investigate the presence of old deployments and replicaSets when running `kubectl get all`. Understand if this retention is intentional (e.g., for rollback capabilities) or if these are stale resources.
 
@@ -95,6 +93,37 @@ This document tracks pending actions and improvements for our services and Kuber
 
     If not needed, research and implement automated cleanup strategies for old deployments and replicaSets (e.g., configuring `revisionHistoryLimit` in Deployments, or using custom scripts/operators to remove resources older than 'X' days). Understand the purpose of keeping old records (e.g., for rollbacks) and determine an appropriate retention policy.
 
+* **Deep Dive into Helm Templating Functions**: Gain a comprehensive understanding of all functions available for Helm chart templating. This includes:
+    * **Go Templating Functions**: Master the standard functions provided by Go's `text/template` package (e.g., `if`, `range`, `with`, `eq`, `ne`, `not`, `and`, `or`, string manipulation, arithmetic operations).
+    * **Sprig Functions**: Familiarize yourself with the extensive set of functions from the Sprig library that Helm incorporates (e.g., `toYaml`, `toJson`, `fromYaml`, `fromJson`, `nindent`, `indent`, `default`, `hasKey`, `get`, `pluck`, `merge`, `trim`, `split`, cryptographic functions, date/time functions).
+    * **Helm-Specific Objects and Functions**: Understand how to effectively use Helm's built-in objects and functions (e.g., `.Release`, `.Chart`, `.Values`, `.Files`, `lookup`, `include`, `required`, `tpl`).
+    * **Purpose and Best Practices**: Learn the common use cases for each type of function and best practices for writing maintainable and robust Helm templates.
+    * **Manage Environment Variables in `deployment.yaml` with Insert Logic**: Research and implement methods to "insert" (or prepend/override) environment variables in `deployment.yaml` within Helm templates, rather than just appending them. This is crucial for managing default environment variables while allowing chart users to easily override or add specific variables at the beginning of the list without manually re-listing all defaults.
+    * **Investigate `helm upgrade` Restart Behavior for `audit-log-generator`**: Analyze why the `audit-log-generator` pod restarts every time `helm upgrade` is performed, even if no changes related to its deployment are made. Identify the root cause (e.g., incorrect `helm.sh/hook` annotations, changes in labels/annotations causing a rolling update, or issues with readiness/liveness probes) and implement a fix to prevent unnecessary restarts.
+
+---
+
+### Implement Principle of Least Privilege for RabbitMQ User Management
+
+**Current State:** The `audit-event-generator`, `audit-log-analysis`, and `notification-service` currently share a single RabbitMQ username and password (`jdevlab`).
+
+**Problem:** This violates the Principle of Least Privilege (PoLP) and is not a good security practice for a production-like environment. If these shared credentials are compromised, an attacker gains broad access to RabbitMQ operations across multiple services. It also hinders granular auditing and makes credential rotation more complex.
+
+**Proposed Solution:**
+1.  **Create dedicated RabbitMQ users** for each service that interacts with RabbitMQ (e.g., `generator-user`, `analyzer-user`, `notification-user`).
+2.  **Assign granular permissions** to each user, limiting their access to only the specific exchanges and queues they need (e.g., `generator-user` only has `write` access to `audit_events` exchange, `analyzer-user` has `read` on `audit_events` queue and `write` on `audit_alerts` exchange, etc.).
+3.  **(Optional but Recommended):** Consider creating dedicated RabbitMQ Virtual Hosts (VHosts) for logical separation of different applications or environments within the same RabbitMQ instance, and scope user permissions to these vhosts.
+
+**Implementation Steps:**
+* **Update `k8s/charts/auditflow-platform/secrets.yaml`** to include distinct username/password pairs for each service.
+* **Update `k8s/charts/auditflow-platform/values.yaml`** to reflect these new user details in the `auditflowSecrets` section.
+* **Automate RabbitMQ user and permission creation:**
+    * **Option A (Recommended for automation):** Create a Helm Post-Install Hook `Job` within the `auditflow-platform` chart. This Job would run a container (e.g., `rabbitmq:management-cli`) that uses `rabbitmqctl` commands to add users and set their granular permissions.
+    * **Option B (Advanced):** Generate a RabbitMQ Definition JSON file using Helm templates and configure the RabbitMQ deployment to import this definition on startup.
+* **Update application deployments (`notification-service`, `audit-event-generator`, `audit-log-analysis`)** to consume their specific RabbitMQ credentials from the ESO-managed `afp-auditflow-platform-app-secrets` Kubernetes Secret.
+
+---
+
 ### Externalize Application Configuration (CRD/ConfigMaps)
 
 * **Purpose**: Move hardcoded application parameters (like `FAILED_LOGIN_WINDOW_SECONDS`, `FAILED_LOGIN_THRESHOLD`, `SENSITIVE_FILES`) out of the application code (`config.py`). This allows for easier updates, version control, and operational management.
@@ -133,10 +162,18 @@ This document tracks pending actions and improvements for our services and Kuber
 
 ## Service Improvements & Fixes
 
+* **Resolve Development WSGI Server Warning**: Address the warning "WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead." in application logs. Configure and deploy a production-ready WSGI server (e.g., Gunicorn, uWSGI) for all Python-based web services to ensure stability, performance, and security in a production environment.
+* **Implement Graceful Shutdown**: Address the issue where pods for these services enter an `Error` state upon termination. This is caused by the application exiting with a non-zero status code. Implement a robust graceful shutdown mechanism in both applications to properly handle termination signals (`SIGTERM`). The graceful shutdown logic should:
+    1.  Stop accepting new work.
+    2.  Complete all pending tasks.
+    3.  Close connections to dependencies (RabbitMQ, Redis, etc.).
+    4.  Exit cleanly with a status code of `0`. This will allow Kubernetes to mark the pods as `Succeeded` upon termination, preventing the `Error` status and unnecessary restart attempts.
+
 ### Audit Generator Service
 
 * **Fix Audit Generator Timestamp**: Ensure the audit generator's timestamp adheres to ISO 8601. It should either end with a timezone offset (like `+00:00`) or a `Z` (to denote UTC), but not both.
 * **Change Audit Generator Events/Sec**: Implement a mechanism to change the `events/sec` rate for the `audit_generator` service using its API.
+* **Audit-log-generator: Enhance Crash Resistance for RabbitMQ Connectivity**: Modify the `audit-log-generator` service to be more resilient to connectivity issues with RabbitMQ. Instead of restarting the pod when it cannot connect, implement retry mechanisms, circuit breakers, or graceful degradation to prevent crashes and allow the service to recover automatically once connectivity is restored.
 
 ### Audit Log Analysis Service
 
@@ -148,6 +185,7 @@ This document tracks pending actions and improvements for our services and Kuber
         * **Add logging within `check_redis_status()`**: Log successful pings (e.g., `logger.debug("Redis Service: Ping successful.")`) and failed pings (e.g., `logger.error("Redis Service: Ping failed...")`), including a warning if `redis_client` is not yet initialized.
         * Integrate this new function into a background task or a periodic check mechanism within the `audit-log-analysis` service (e.g., a separate thread or an asyncio task) to continuously monitor Redis health.
     * **Impact on Tests**: This refactoring will enable a dedicated `test_redis_ping_updates_health_status` test, which can then be implemented to verify the new function's behavior.
+* **Audit-log-analysis: Enhance Crash Resistance for Dependency Connectivity**: Modify the `audit-log-analysis` service to be more resilient to connectivity issues with Redis and RabbitMQ. Instead of restarting the pod when it cannot connect to these dependencies, implement retry mechanisms, circuit breakers, or graceful degradation to prevent crashes and allow the service to recover automatically once connectivity is restored.
 * **Correct Prometheus Metrics Content-Type**: Ensure the `/metrics` endpoint in `audit_analysis/api.py` returns the correct `Content-Type` header for Prometheus.
     * **Problem**: Currently, the `/metrics` endpoint defaults to `text/html`, which is not the standard for Prometheus scraping.
     * **Action**:

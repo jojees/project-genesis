@@ -1,0 +1,24 @@
+dependencies:
+- name: audit-event-generator
+  repository: file://charts/audit-event-generator
+  version: 0.1.0
+- name: audit-log-analysis
+  repository: file://charts/audit-log-analysis
+  version: 0.1.0
+- name: notification-service
+  repository: file://charts/notification-service
+  version: 0.1.0
+- name: event-audit-dashboard
+  repository: file://charts/event-audit-dashboard
+  version: 0.1.0
+- name: postgresql
+  repository: https://charts.bitnami.com/bitnami
+  version: 13.2.29
+- name: rabbitmq
+  repository: https://charts.bitnami.com/bitnami
+  version: 12.1.0
+- name: redis
+  repository: https://charts.bitnami.com/bitnami
+  version: 18.16.0
+digest: sha256:ae23f76c75909292afa19db7130f6e4c353d9d6146ec203db1fbfe4ef8536d9e
+generated: "2025-08-01T11:25:56.153922+05:30"

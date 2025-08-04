@@ -1,0 +1,63 @@
+# k8s/charts/auditflow-platform/charts/audit-log-analysis/values.yaml
+
+replicaCount: 1
+
+imagePullSecrets: []
+podSecurityContext: {}
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8001"
+
+image:
+  repository: jojees/audit-log-analysis
+  tag: ph3.6
+  pullPolicy: IfNotPresent
+
+waitFor:
+  - name: redis-master
+    port: 6379
+  - name: rabbitmq
+    port: 5672
+
+service:
+  appPort: 5001
+  appPortName: http-app
+  metricsPort: 8001
+  metricsPortName: http-metrics
+  type: ClusterIP
+
+env:
+  # RABBITMQ_HOST: rabbitmq-service
+  RABBITMQ_USER: jdevlab
+  RABBITMQ_PASS: jdevlab
+  RABBITMQ_QUEUE: audit_events
+  APP_PORT: "5001"
+  PROMETHEUS_PORT: "8001"
+  REDIS_PORT: "6379"
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+livenessProbe:
+  enabled: true
+  path: /healthz
+  port: http-app
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 1
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  path: /healthz
+  port: http-app
+  initialDelaySeconds: 3
+  periodSeconds: 5
+  timeoutSeconds: 1
+  failureThreshold: 2

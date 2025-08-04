@@ -1,0 +1,23 @@
+replicas: 1
+
+imagePullSecrets: []
+podSecurityContext: {}
+
+image:
+  repository: jojees/event-audit-dashboard
+  tag: v1.0.2
+  imagePullPolicy: Always
+
+ports:
+  type: NodePort
+  appPortName: http-dashboard
+  nodePort: "30081"  # Assign a specific NodePort in the 30000-32767 range. Choose one that's not in use.
+  port: "80"         # The port the Kubernetes Service itself will listen on (standard HTTP port)
+  targetPort: "8080" # The port on the pod that the service should send traffic to
+
+waitFor:
+  - name: notification-service
+    port: 8000
+
+env:
+  NOTIFICATION_SERVICE_PORT: "8000"
