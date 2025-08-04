@@ -230,6 +230,15 @@ The project leverages **GitHub Actions** for its **Continuous Integration and Co
     * **Image Tagging:** Automatically generates Docker image tags based on the commit SHA, branch name (e.g., `main` gets `latest`, `dev` gets `dev`, `dev-snapshot`), and a combination of `docker_org` and `service_name`.
     * **Caching:** Uses GitHub Actions cache (`type=gha`) to speed up Docker image builds.
 
+### Continuous Delivery (CD) Workflow
+
+* **`.github/workflows/deploy-services.yml` (Main CD Workflow):**
+    * **Trigger:** This workflow does not run on a `push` event. Instead, it is triggered by a **`workflow_dispatch` event**, which is initiated by the `build-python-services.yml` CI workflow upon a successful build. This controlled triggering mechanism ensures that the CD pipeline only runs after all CI checks have passed.
+    * **Runner Strategy:** This is a core feature of the project's CD strategy. The deployment jobs in this workflow run on a **self-hosted GitHub Actions runner** within the project's K3s cluster. This allows the workflow to have direct, secure access to the cluster's internal network and API.
+    * **Deployment Logic:** The workflow is an orchestrator. It calls the `deploy-single-service.yml` reusable workflow for each changed service.
+    * **Image Promotion:** It includes a dedicated job to promote the deployed immutable SHA-tagged image to a new environment tag (e.g., `auditflow-platform/notification-service:dev`) after the Helm deployment to the cluster is verified as successful.
+    * **Tooling:** This workflow's primary tool for interacting with the Kubernetes cluster is **Ansible**, which encapsulates the Helm deployment logic.
+
 ### Integrated Security Scans (DevSecOps):
 
 Both workflows implicitly, via the reusable workflow, integrate security scanning at different stages of the CI/CD pipeline.
@@ -315,11 +324,14 @@ The core inter-service communication relies heavily on **RabbitMQ** for an event
 ---
 
 ## Deployment Strategy & Rollbacks 🔄
-The deployment process relies on GitHub Actions for building Docker images and a Kubernetes base configuration `(k8s/base)` for defining the desired state.
+The deployment process relies on GitHub Actions to orchestrate the build and a self-hosted runner to execute the deployment logic via Ansible.
 
 **Current Knowns:**
-* **Initial Deployment:** Based on the `infra/terraform` and `infra/ansible` details, the initial infrastructure provisioning and K3s cluster setup are automated. Application deployment is via direct application of `k8s/base` manifests, or conceptually via Helm (once `k8s/charts` is populated).
-* **Rolling Updates:** Kubernetes Deployments, by default, employ a rolling update strategy when `replicas` are updated or the `template` changes.
+* **Initial Deployment:** The K3s cluster is provisioned by Ansible. Application deployment is performed by the `deploy_k8s_services.yml` Ansible playbook, which calls `helm upgrade --install` using the chart and a dynamically generated override file.
+* **Image Tagging:** Services are built as multi-architecture Docker images tagged with an immutable Git SHA.
+* **Environment Tags & Promotion:** After a successful deployment to `dev` or `staging`, a separate job promotes the immutable SHA tag to an environment-specific tag (e.g., `notification-service:dev`) on Docker Hub.
+* **Rolling Updates:** Kubernetes Deployments, by default, employ a rolling update strategy when the `template` (e.g., the image tag) changes.
+* **Manual Rollback Capability:** The **Helm** package manager provides a built-in mechanism for manual rollbacks to a previous deployment version (`helm rollback <release-name>`).
 
 **Future Enhancements (Planned/To Be Detailed):**
 * **Automated Rollback Mechanism:** Specific strategies and tooling (e.g., leveraging Helm's rollback capabilities) for quickly reverting to a previous stable version in case of a failed deployment.

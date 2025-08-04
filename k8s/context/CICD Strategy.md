@@ -37,6 +37,7 @@ The CI/CD pipeline adheres to the following principles:
 
 * **Automation First:** Minimize manual intervention at every stage of the software delivery process.
 * **Infrastructure as Code (IaC):** Manage all infrastructure and configuration declaratively using tools like Ansible and Helm.
+* **Ansible for Automation:** Complex deployment logic is abstracted into declarative Ansible playbooks, making it more readable, portable, and robust.
 * **Version Control as Source of Truth:** Git repositories serve as the single source of truth for both application code and infrastructure configurations.
 * **Shift-Left Security (DevSecOps):** Integrate security scanning and checks early in the development and CI process.
 * **Reproducibility:** Ensure deployments are consistent and repeatable across all environments.
@@ -44,20 +45,29 @@ The CI/CD pipeline adheres to the following principles:
 
 ## 3. Current CI/CD Implementation
 
-The current CI/CD pipeline primarily leverages **GitHub Actions** for orchestration and **Ansible** for infrastructure provisioning and runner management.
+The current CI/CD pipeline primarily leverages **GitHub Actions** for orchestration and **Ansible** for infrastructure provisioning and application deployment.
 
 ### GitHub Actions Workflows
 
-GitHub Actions define the automated workflows in YAML files located in the `.github/workflows/` directory.
+GitHub Actions define the automated workflows in YAML files located in the `.github/workflows/` directory. The workflow logic is now separated to improve maintainability and scalability.
 
-* **`build-python-services.yml` (Main CI Workflow):**
-    * **Trigger:** Initiates on `push` events to `main`, `staging`, and `dev` branches.
-    * **Conditional Execution:** Uses `dorny/paths-filter` to trigger builds only when relevant service directories (e.g., `src/audit_event_generator/`) have changed, optimizing resource usage.
-    * **Steps:** Orchestrates the build, test, and security scanning for each Python microservice.
+* **`build-python-services.yml` (CI Orchestrator):**
+    * **Trigger:** Initiates on `push` events to `dev`, `staging`, `main`, and all feature branches (`feature/**`).
+    * **Conditional Execution:** Uses `dorny/paths-filter` to trigger builds only when relevant service directories (`src/` or `k8s/charts/`) have changed, optimizing resource usage.
+    * **Steps:** Orchestrates the build, test, and security scanning for each Python microservice, and pushes the Docker image with an immutable SHA tag.
 
-* **`build-single-service.yml` (Reusable Workflow):**
-    * **Purpose:** A reusable workflow that encapsulates the common logic for building, pushing multi-architecture Docker images, and performing security scans for a single microservice. This promotes the **Don't Repeat Yourself (DRY)** principle.
-    * **Reusability:** Called by `build-python-services.yml` for each service.
+* **`deploy-services.yml` (CD Orchestrator):**
+    * **Purpose:** This workflow's sole responsibility is to orchestrate deployments and image promotion. It is triggered by `workflow_dispatch` from a CI job or a manual trigger.
+    * **Conditional Execution:** It uses inputs from the triggering workflow (`changes`, `github_sha`) to determine which services have changed and should be deployed.
+    * **Post-Deployment Promotion:** It includes a dedicated job that runs on a public runner to promote the SHA-tagged image to a new environment tag (e.g., `:dev`) only after the deployment to the cluster has been successfully verified.
+
+* **`deploy-single-service.yml` (Reusable Deployment Workflow):**
+    * **Purpose:** A reusable workflow that encapsulates the common deployment logic for a single microservice. This promotes the **Don't Repeat Yourself (DRY)** principle.
+    * **Reusability:** It is called by `deploy-services.yml` and is parameterized to handle surgical deployments to `dev` and holistic deployments to `staging`.
+
+* **`build-single-service.yml` (Reusable Build Workflow):**
+    * **Purpose:** A reusable workflow that encapsulates the common logic for building, pushing multi-architecture Docker images, and performing security scans for a single microservice.
+
 
 ### Runner Strategy
 
@@ -74,16 +84,13 @@ GitHub Actions jobs are executed on runners, which are virtual machines or conta
 
 ### Ansible's Role in CI/CD
 
-Ansible plays a critical role in the CI/CD strategy, primarily for infrastructure management.
+Ansible plays a critical role in the CI/CD strategy, primarily for infrastructure management and application deployment.
 
 * **Infrastructure Provisioning:** Ansible playbooks are used for:
     * Initial provisioning and configuration of Raspberry Pi hosts for the K3s cluster.
     * Installation and setup of K3s itself.
-* **Self-Hosted Runner Management:** Ansible is responsible for the complete lifecycle management of the GitHub Actions self-hosted runners, including:
-    * Deploying the runner application to the Kubernetes cluster.
-    * Ensuring necessary dependencies and tools are installed on the runner pods.
-    * Managing runner updates and cleanup.
-* **Future Deployment Orchestration:** While Helm is currently used for application deployments, Ansible could be extended to orchestrate `helm` commands or `kustomize` applications for more complex deployment scenarios, especially for `preprod`/`prod` environments.
+* **Self-Hosted Runner Management:** Ansible is responsible for the complete lifecycle management of the GitHub Actions self-hosted runners.
+* **Application Deployment Orchestration:** Ansible is now used to encapsulate the declarative logic for `helm upgrade` commands, image tag updates, and other deployment steps, making the GitHub Actions workflow YAML cleaner and more maintainable.
 
 ### Integrated Security Scans (DevSecOps)
 
@@ -91,11 +98,11 @@ Security is "shifted left" by integrating automated security scanning directly i
 
 * **Static Application Security Testing (SAST) - Bandit:**
     * **Integration:** **Bandit**, a SAST tool for Python, runs on the application source code *before* Docker image creation.
-    * **Output:** Generates SARIF reports which are uploaded to GitHub Code Scanning, providing code-level vulnerability insights directly in the developer workflow.
+    * **Output:** Generates SARIF reports which are uploaded to GitHub Code Scanning.
 
 * **Software Composition Analysis (SCA) & Vulnerability Scanning - Trivy:**
     * **Integration:** **Trivy** performs filesystem scans on application dependencies and image scans on built Docker images.
-    * **Output:** Identifies known vulnerabilities (CVEs) in third-party libraries and operating system packages. SARIF reports are uploaded to GitHub Code Scanning. Scans are configured to be non-blocking (`exit-code: '0'`) to provide continuous feedback without halting the pipeline.
+    * **Output:** Identifies known vulnerabilities (CVEs) in third-party libraries and operating system packages. SARIF reports are uploaded to GitHub Code Scanning.
 
 ## 4. Deployment Workflows
 
@@ -108,23 +115,25 @@ The CI/CD pipeline orchestrates the following high-level deployment workflows:
 3.  **SAST & SCA Scans:** Bandit and Trivy run on the source code and dependencies.
 4.  **Unit Tests:** Application unit tests are executed.
 5.  **Docker Image Build:** If all checks pass, Docker images are built for the changed microservices.
-6.  **Image Push:** Multi-architecture Docker images are pushed to Docker Hub.
+6.  **Image Push:** Multi-architecture Docker images are pushed to Docker Hub with an immutable SHA tag.
+7.  **CD Trigger:** On pushes to `dev` or `staging`, the `deploy-services.yml` workflow is triggered with the SHA tag and other necessary inputs.
 
 ### Deployment Workflow (Dev/Staging)
 
-1.  **Image Ready:** A new Docker image is successfully pushed to Docker Hub.
-2.  **Helm Chart Update (Manual/Automated):** The `image.tag` in the respective Helm subchart's `values.yaml` (or environment-specific override) is updated.
-3.  **GitHub Actions Trigger:** A push to `dev` or `staging` branch (or manual `workflow_dispatch`) triggers the deployment workflow.
-4.  **Self-Hosted Runner Activation:** A self-hosted GitHub Actions runner in the K3s cluster picks up the deployment job.
-5.  **Helm Deployment:** The runner executes `helm upgrade --install` commands, using the `auditflow-platform` umbrella chart, `secrets.yaml` (decrypted by `helm-sops`), and environment-specific `values.yaml` files.
-6.  **Helm Tests:** Post-deployment, `helm test` is executed to validate the deployed application's health and connectivity.
+The new, automated deployment workflow is handled by the `deploy-services.yml` and `deploy-single-service.yml` workflows, with Ansible orchestrating the deployment.
+
+1.  **Deployment Trigger:** A push to `dev` or `staging` triggers a CI job which, in turn, triggers the `deploy-services.yml` workflow via `workflow_dispatch`.
+2.  **Surgical Deployment (`dev` branch):**
+    * The workflow runs on a self-hosted runner and executes an Ansible playbook with parameters for a surgical deployment.
+    * The Ansible playbook dynamically creates a `values-override.yaml` file, pinning the new image tag to the immutable SHA and runs `helm upgrade --install`.
+    * A dedicated `promote` job, running on a public runner after successful deployment, re-tags the deployed image with the `:dev` tag.
+3.  **Holistic Deployment (`staging` branch):**
+    * The workflow calls the reusable `deploy-single-service.yml` workflow for each service.
+    * The Ansible playbook runs `helm upgrade --install` using the dedicated `staging/values.yaml` file, which contains the pinned image tags for the entire platform. This ensures the entire stack is deployed as a cohesive unit.
 
 ### Infrastructure Provisioning
 
-* **Ansible Playbooks:** Executed manually or via a separate CI job to:
-    * Provision and configure Raspberry Pi nodes.
-    * Install K3s on the cluster.
-    * Deploy and manage the lifecycle of self-hosted GitHub Actions runners.
+* **Ansible Playbooks:** Executed manually or via a separate CI job to provision, configure, and manage Raspberry Pi nodes and the K3s cluster.
 
 ## 5. Secrets Management in CI/CD
 

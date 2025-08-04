@@ -36,34 +36,26 @@ This umbrella chart simplifies complex deployments by:
 
 ## 2. Chart Directory Structure
 
-The `auditflow-platform` chart follows a standard Helm chart structure, with key directories and files:
+The `auditflow-platform` chart follows a standard Helm chart structure, with key directories and files. Note the location of `values-dev.yaml` which is external to the main chart's directory but used for environment-specific overrides.
 ```
 k8s/
-└── charts/
-└── auditflow-platform/
-├── Chart.yaml                  # Chart metadata and dependencies
-├── values.yaml                 # Default configuration values for the entire platform
-├── secrets.yaml                # SOPS-encrypted sensitive values
-├── environments/               # Directory for environment-specific value overrides
-│   ├── dev-values.yaml
-│   └── staging-values.yaml
-├── charts/                     # Contains packaged subcharts (local and downloaded remote)
-│   ├── audit-event-generator/  # Local application subchart
-│   ├── audit-log-analysis/     # Local application subchart
-│   ├── event-audit-dashboard/  # Local application subchart
-│   ├── notification-service/   # Local application subchart
-│   ├── postgresql-13.2.29.tgz  # Downloaded remote chart (example)
-│   ├── rabbitmq-12.1.0.tgz     # Downloaded remote chart (example)
-│   ├── redis-18.16.0.tgz       # Downloaded remote chart (example)
-│   └── external-secrets-0.9.1.tgz # Downloaded remote chart (example)
-├── templates/                  # Kubernetes manifest templates for the umbrella chart
-│   ├── _helpers.tpl            # Reusable template functions
-│   ├── clustersecretstore.yaml # External Secrets Operator ClusterSecretStore
-│   ├── externalsecret.yaml     # External Secrets Operator ExternalSecret
-│   ├── source-secret.yaml      # Kubernetes Secret holding SOPS-decrypted values
-│   └── NOTES.txt               # Post-installation notes
-├── .helmignore                 # Files/patterns to ignore when packaging this chart
-└── Chart.lock                  # Locks versions of chart dependencies
+├── charts/
+│   ├── auditflow-platform/             # Main umbrella chart directory
+│   │   ├── Chart.yaml                  # Chart metadata and dependencies
+│   │   ├── values.yaml                 # Default configuration values for the entire platform
+│   │   ├── secrets.yaml                # SOPS-encrypted sensitive values
+│   │   ├── charts/                     # Contains packaged subcharts (local and downloaded remote)
+│   │   │   ├── audit-event-generator/  # Local application subchart
+│   │   │   ├── ...                     # Other application subcharts
+│   │   │   ├── postgresql-13.2.29.tgz  # Downloaded remote chart (example)
+│   │   │   └── ...                     # Other infrastructure charts
+│   │   ├── templates/                  # Kubernetes manifest templates for the umbrella chart
+│   │   │   ├── _helpers.tpl            # Reusable template functions
+│   │   │   ├── ...                     # Other umbrella chart templates
+│   │   │   └── NOTES.txt               # Post-installation notes
+│   │   ├── .helmignore                 # Files/patterns to ignore when packaging this chart
+│   │   └── Chart.lock                  # Locks versions of chart dependencies
+│   └── values-dev.yaml                 # Environment-specific overrides for 'dev' environment
 ```
 
 ## 3. `Chart.yaml` - The Blueprint
@@ -150,8 +142,6 @@ The `values.yaml` file at the root of `auditflow-platform` (`k8s/charts/auditflo
       enabled: true
     ```
 
----
-
 * **Passing Configuration to Subcharts:** Values defined under a subchart's key in the parent `values.yaml` are automatically passed down to that subchart. This allows for centralized configuration management.
     ```yaml
     # k8s/charts/auditflow-platform/values.yaml (excerpt)
@@ -184,15 +174,48 @@ The `values.yaml` file at the root of `auditflow-platform` (`k8s/charts/auditflo
 
 ### Environment-Specific Overrides
 
-To manage configurations for different environments (e.g., `dev`, `staging`, `production`), separate `values.yaml` files are used. These files are typically placed in an `environments/` subdirectory (e.g., `k8s/charts/auditflow-platform/environments/dev-values.yaml`).
+To manage configurations for different environments (e.g., `dev`, `staging`, `production`), separate `values.yaml` files are used. These files can be placed alongside the main chart or in a dedicated `environments/` subdirectory within the chart.
 
-During deployment, these files are layered using multiple `-f` flags, with later files overriding earlier ones. This allows for a clean separation of environment-specific settings from the chart's defaults.
+For instance, your `k8s/charts/values-dev.yaml` file provides overrides specifically for the `dev` environment. This file typically contains settings like image tags for development builds or specific configurations for non-production dependencies (e.g., disabling Redis authentication for local testing).
+
+**Example `k8s/charts/values-dev.yaml`:**
+
+```yaml
+# k8s/charts/values-dev.yaml
+
+audit-event-generator:
+  enabled: true
+  image:
+    tag: dev
+audit-log-analysis:
+  enabled: true
+  image:
+    tag: dev
+notification-service:
+  enabled: true
+  image:
+    tag: dev
+event-audit-dashboard:
+  enabled: true
+  image:
+    tag: dev
+
+redis:
+  auth:
+    enabled: false
+    # These two lines are crucial to override the Bitnami chart's security defaults
+    password: "" 
+    allowEmptyPassword: yes 
+```
+
+During deployment, these files are layered using multiple `-f` flags, with values from later files overriding those from earlier ones. This allows for a clean separation of environment-specific settings from the chart's defaults.
 
 ```bash
 # Example deployment command using environment-specific values
-helm install afp . --namespace dev --create-namespace \
-  -f secrets.yaml \
-  -f environments/dev-values.yaml
+# Assuming you are running this command from the 'k8s/charts/' directory
+helm install afp auditflow-platform/ --namespace dev --create-namespace \
+  -f auditflow-platform/secrets.yaml \
+  -f values-dev.yaml
 ```
 
 ## 5. Subchart Management
