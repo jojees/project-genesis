@@ -1,0 +1,31 @@
+# k8s/overlays/local/values.yaml
+
+audit-event-generator:
+  enabled: true
+  env:
+    EVENT_GENERATION_INTERVAL_SECONDS: "0"
+audit-log-analysis:
+  enabled: true
+event-audit-dashboard:
+  enabled: true
+notification-service:
+  enabled: true
+
+postgresql:
+  enabled: true
+  auth:
+    password: "your_secure_postgres_password"
+    postgresPassword: "your_secure_postgres_password"
+  primary:
+    persistence:
+      storageClass: "hostpath"
+
+rabbitmq:
+  enabled: true
+  auth:
+    erlangCookie: "Sb+9XInj1aNkU8Ny90nTsKeyALgylomwSZ0VvYaDx0U=%"
+
+redis:
+  enabled: true
+  auth:
+    enabled: false

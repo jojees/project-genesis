@@ -1,0 +1,77 @@
+# k8s-deployment.yaml (or your renamed deployment file)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "audit-log-analysis.fullname" . }}
+  labels:
+    {{- include "audit-log-analysis.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "audit-log-analysis.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "audit-log-analysis.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+         {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: default
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+      {{- range .Values.waitFor }}
+      {{ include "afp-wait-for" (dict "Name" .name "Port" .port "Context" $) | nindent 6 }}
+      {{- end }}
+      containers:
+      - name: analysis-app
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.service.appPort }}
+          name: {{ .Values.service.appPortName }}
+        - containerPort: {{ .Values.service.metricsPort }}
+          name: {{ .Values.service.metricsPortName }}
+        env:
+          {{- $allEnv := list }}
+          {{- range $key, $value := .Values.env }}
+          {{- $allEnv = append $allEnv (dict "name" $key "value" (printf "%s" $value)) }}
+          {{- end }}
+          {{- $allEnv = append $allEnv (dict "name" "RABBITMQ_HOST" "value" (printf "%s-rabbitmq" .Release.Name)) }}
+          {{- $allEnv = append $allEnv (dict "name" "REDIS_HOST" "value" (printf "%s-redis-master" .Release.Name)) }}
+          {{- toYaml $allEnv | nindent 10 }}
+          {{- range $key, $value := .Values.env }}
+        # - name: {{ $key }}
+        #   value: "{{ $value }}"
+        #   {{- end }}
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+        {{- if .Values.livenessProbe.enabled }}
+        livenessProbe:
+          httpGet:
+            path: {{  .Values.livenessProbe.path }}
+            port: {{ .Values.livenessProbe.port }}
+          initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+        {{- end }}
+        {{- if .Values.readinessProbe.enabled }}
+        readinessProbe:
+          httpGet:
+            path: {{  .Values.readinessProbe.path }}
+            port: {{ .Values.readinessProbe.port }}
+          initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+        {{- end }}

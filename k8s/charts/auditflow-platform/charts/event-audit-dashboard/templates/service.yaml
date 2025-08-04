@@ -1,0 +1,17 @@
+# eventsApp/event-audit-dashboard/k8s-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "event-audit-dashboard.fullname" . }}
+  labels:
+    {{- include "event-audit-dashboard.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "event-audit-dashboard.selectorLabels" . | nindent 4 }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.ports.port }}
+      targetPort: {{ .Values.ports.targetPort }}
+      nodePort: {{ .Values.ports.nodePort }}
+      name: {{ .Values.ports.appPortName }}
+  type: {{ .Values.ports.type }}
