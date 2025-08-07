@@ -11,7 +11,8 @@ if [ ! -f "./.runner" ]; then
         --name "${RUNNER_NAME}" \
         --work "${RUNNER_WORKDIR}" \
         --token "${GITHUB_TOKEN}" \
-        --unattended
+        --unattended \
+        --disable-update
     echo "config.sh finished."
 else
     echo "Runner already configured."

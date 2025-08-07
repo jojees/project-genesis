@@ -18,4 +18,4 @@ EXPOSE 8000
 
 # Command to run the application when the container starts
 # Using -m to run main as a module within the notification_service package
-CMD ["python", "-m", "notification_service.main"] # <--- THIS IS THE FINAL RECOMMENDED CMD
+CMD ["python", "-m", "notification_service.main"]

@@ -9,14 +9,14 @@
       - gnupg2
     state: present
     update_cache: yes
-  become: yes
+  become: true
 
 - name: Install K3s worker
   ansible.builtin.shell: |
     curl -sfL https://get.k3s.io | K3S_URL=https://{{ k3s_master_ip }}:{{ k3s_api_port }} K3S_TOKEN={{ k3s_node_token }} sh -
   args:
     creates: /etc/systemd/system/k3s-agent.service
-  become: yes
+  become: true
   environment:
     K3S_NODE_NAME: "{{ ansible_hostname }}"
 
@@ -26,4 +26,4 @@
     state: started
     enabled: yes
     daemon_reload: yes
-  become: yes
+  become: true

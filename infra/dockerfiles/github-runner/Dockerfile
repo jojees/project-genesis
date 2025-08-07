@@ -4,7 +4,7 @@
 # Ensure you use an ARM64 (or ARM) base image compatible with your Raspberry Pi 5
 # Check GitHub's runner releases for the latest versions and corresponding base images.
 # Example for ARM64 runner: ghcr.io/actions/actions-runner:2.312.0-linux-arm64
-FROM ghcr.io/actions/actions-runner:2.327.0
+FROM ghcr.io/actions/actions-runner:2.327.1
 
 # Set environment variables for non-interactive installations
 ENV DEBIAN_FRONTEND=noninteractive
@@ -16,13 +16,19 @@ USER root
 # Update package lists, install tools, and clean up apt cache
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        git \
-        curl \
-        wget \
-        gnupg \
-        iputils-ping \
-        curl \
+    git \
+    curl \
+    wget \
+    gnupg \
+    iputils-ping \
+    curl \
+    python3 \
+    python3-pip \
+    ssh-client \
+    vim \
     && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install ansible
 
 # Install kubectl
 # Fetch the latest stable kubectl version for ARM64

@@ -1,0 +1,20 @@
+TODO: Move this commands into an git based CD.
+
+docker build -t jojees/github-actions-runner-arm64:latest .
+docker push jojees/github-actions-runner-arm64:latest
+
+# Force Kubernetes to use the new Docker image
+## Get a token from github and update the secrets.
+kubectl rollout restart deployment github-runner-deployment -n github-runner
+
+
+# Terminate and launch a new runner.
+
+## Scale down the replicas.
+kubectl -n github-runner scale deployment/github-runner-deployment --replicas=0
+
+## Delete the PVC. This will be automatically recreated by the StatefulSet/Deployment.
+kubectl delete pvc github-runner-pv-claim -n github-runner
+
+## Scale up the replicas.
+kubectl -n github-runner scale deployment/github-runner-deployment --replicas=1

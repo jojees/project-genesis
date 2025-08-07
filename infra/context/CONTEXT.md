@@ -70,6 +70,7 @@ The following essential application dependencies are deployed and managed as Kub
     * Initial provisioning and configuration of Raspberry Pi hosts for K3s.
     * Installation and setup of K3s master and worker components.
     * Deployment of the self-hosted GitHub Actions runner *as Kubernetes manifests* into the K3s cluster.
+    * **Application Deployment:** Ansible's role extends to deploying the platform's microservices via a dedicated playbook, which is executed by the self-hosted runner and is the final step in the CI/CD pipeline's `deploy-services.yml` workflow.
     * **Full Lifecycle Management**: Ansible handles the complete lifecycle of the self-hosted GitHub Actions runner, including **initial deployment, updates, pre-deployment cleanup (deleting old runners from both K8s and GitHub's API), and post-deployment verification of its 'online' and 'idle' status directly via the GitHub API.**
 * **Terraform/CloudFormation/ARM:** Currently not actively used for this specific home lab K3s cluster setup. These tools are reserved for potential future provisioning of cloud resources (e.g., VMs, networking, managed services) if the project expands beyond the home lab into a public cloud environment.
 
@@ -87,9 +88,8 @@ The following essential application dependencies are deployed and managed as Kub
     * **Helm:** Used for deployments to `dev` and `staging` environments, leveraging its templating and package management capabilities.
     * **Kustomize:** Preferred for `prod` and `preprod` environments to apply declarative configuration overlays and promote consistent, immutable deployments.
 * **Deployment Triggers:** Automated GitHub Actions workflows trigger deployments:
-    * Pushes to the `dev` branch typically trigger `dev` environment deployments.
-    * Pushes to `release/*` branches or specific tags might trigger `staging` or `preprod` deployments.
-    * Pushes to the `main` branch (after successful testing/validation) trigger `prod` deployments.
+    * **Push-based CI:** A `push` to `dev` or `staging` triggers a **CI workflow** (`build-python-services.yml`).
+    * **`workflow_dispatch` CD:** Upon successful completion of the CI build, the CI workflow triggers a **CD workflow** (`deploy-services.yml`) via `workflow_dispatch`. This allows for a controlled transition from CI (on GitHub-hosted runners) to CD (on the self-hosted runner).
 
 ### 4. Security Considerations (Infrastructure-Level)
 

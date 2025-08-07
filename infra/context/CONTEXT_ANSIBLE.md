@@ -33,25 +33,26 @@ The `infra/ansible/` directory follows a standard Ansible project layout:
         ```
     * `group_vars/all/vault.yaml`: This is an **encrypted** file managed by Ansible Vault. It securely stores sensitive variables that apply globally to all managed hosts.
     * **Future Consideration: Environmental Vars**: For multiple environments (dev, staging, production), consider organizing `group_vars` by environment (e.g., `group_vars/production/`, `group_vars/development/`) for clear separation.
-* `roles/`: Contains reusable, modular Ansible roles.
-    * `k3s_master/`: Manages tasks specific to setting up the K3s master node, primarily retrieving the `node-token`.
-    * `k3s_worker/`: Manages tasks for joining nodes as K3s workers.
-    * `github_runner/` (Future): Will contain tasks for deploying the self-hosted GitHub Actions runner into the K3s cluster.
-    * **Complete Role Structure**: For robust role development, ensure roles have the following standard directories:
-        * `handlers/main.yaml`: For defining actions triggered by `notify` (e.g., service restarts).
-        * `templates/`: For Jinja2 templated configuration files.
-        * `files/`: For static files to be copied.
-        * `defaults/main.yaml`: For role default variables (lowest precedence, easily overridden).
-        * `vars/main.yaml`: For role-specific variables not meant to be easily overridden.
-        * `meta/main.yaml`: For role metadata and dependencies.
 * Playbooks:
     * `homelab.yaml`: The main playbook that orchestrates the entire K3s cluster deployment by calling the `k3s_master` and `k3s_worker` roles.
     * `deploy_github_runner.yaml`: A specific playbook for deploying and managing the GitHub Actions self-hosted runner within the K3s cluster.
+    * **`deploy_k8s_services.yml`**: A new, primary playbook for **application deployment**. It is triggered by the GitHub Actions CD workflow and uses the `deploy_k8s_services` role to perform Helm operations based on dynamic inputs.
+* `roles/`: Contains reusable, modular Ansible roles.
+    * `k3s_master/`: Manages tasks specific to setting up the K3s master node, primarily retrieving the `node-token`.
+    * `k3s_worker/`: Manages tasks for joining nodes as K3s workers.
+    * `github_runner/`: Contains tasks for deploying the self-hosted GitHub Actions runner into the K3s cluster. The role's logic includes registering the runner with GitHub and cleaning up old runners via the GitHub API.
+    * **`deploy_k8s_services/`**: A new role responsible for the **Helm-based application deployment** logic, taking dynamic inputs from the CI/CD pipeline.
 * `ansible.cfg`:
     * Configures Ansible's behavior for this project.
     * `inventory = inventory.ini`: Specifies the inventory file.
     * `host_key_checking = False`: **(WARNING: For homelab convenience; bypasses strict host key verification. Not recommended for production. Prefer `StrictHostKeyChecking=yes` and pre-populating `known_hosts`.)**
     * `forks = 5`: Sets the default number of parallel processes Ansible uses for task execution. This can be tuned for performance based on your control node and target host count.
+* `requirements.yml`:
+    * This file declares Ansible Galaxy collections and roles that the playbooks depend on. For K3s and Kubernetes deployments, it will typically include:
+        ```yaml
+        collections:
+          - name: community.kubernetes
+        ```
 
 ### 3. Variable Management Strategy
 
@@ -148,6 +149,19 @@ Ansible Vault is integral for securely managing sensitive data within the IaC re
 * **`github_runner` Role (Future):**
     * **Purpose:** Will be created to deploy the self-hosted GitHub Actions runner into the K3s cluster.
     * **Key Tasks:** Will involve using Ansible's `kubernetes.core.k8s` module (or similar) to apply Kubernetes manifests (Deployment, ServiceAccount, Role, RoleBinding) for the runner.
+* **`deploy_k8s_services.yml` Playbook:**
+    * **Purpose:** This is the main entry point for the **Continuous Deployment (CD) pipeline**. It is called by the `deploy-services.yml` GitHub Actions workflow.
+    * **Flow:**
+        1.  `Run `deploy_k8s_services` role`: It executes the `deploy_k8s_services` role on the `k3s_master` host (as the control node for the cluster).
+        2.  It passes dynamic variables to the role, such as `release_name_from_gha`, `namespace_from_gha`, and `override_file_from_gha`, which are sourced directly from the GitHub Actions workflow inputs.
+
+* **`deploy_k8s_services` Role:**
+    * **Purpose:** Responsible for performing the `helm upgrade --install` command within the K3s cluster. It is designed to be fully parameterized by the calling playbook.
+    * **Key Tasks:** The primary task in `tasks/main.yml` will use a module (e.g., `kubernetes.core.helm`) to:
+        1.  Specify the Helm chart directory (`k8s/charts`).
+        2.  Use the `release_name` and `namespace` variables from the playbook.
+        3.  Apply the `values-override.yaml` file, dynamically created by the CI workflow, to override the image tags with the new Git SHA.
+    * **Variables:** The `vars/main.yaml` file would hold any default values for the role, though most critical values (like image tags) are overridden dynamically via the playbook's `extra-vars`.
 
 ### 12. Execution Commands
 

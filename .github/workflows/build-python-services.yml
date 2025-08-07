@@ -1,76 +1,55 @@
-name: "CI: Optimized Multi-arch Docker Builds for Python Services"
+# .github/workflows/build-python-services.yml
+
+name: "CI: Build and Tag Python Services"
 
 on:
   push:
     branches:
       - main
-      - staging
       - dev
+      - staging
+      - 'feature/**'
 
 jobs:
   filter_changes:
     runs-on: ubuntu-latest
     outputs:
-      event_audit_dashboard_changes: ${{ steps.changes.outputs.event-audit-dashboard }}
-      notification_service_changes: ${{ steps.changes.outputs.notification-service }}
-      audit_log_analysis_changes: ${{ steps.changes.outputs.audit-log-analysis }}
-      audit_event_generator_changes: ${{ steps.changes.outputs.audit-event-generator }}
+      notification_service_src: ${{ steps.changes.outputs.notification-service-src }}
+      notification_service_k8s: ${{ steps.changes.outputs.notification-service-k8s }}
+      audit_log_analysis_src: ${{ steps.changes.outputs.audit-log-analysis-src }}
+      audit_log_analysis_k8s: ${{ steps.changes.outputs.audit-log-analysis-k8s }}
+      event_audit_dashboard_src: ${{ steps.changes.outputs.event-audit-dashboard-src }}
+      event_audit_dashboard_k8s: ${{ steps.changes.outputs.event-audit-dashboard-k8s }}
+      audit_event_generator_src: ${{ steps.changes.outputs.audit-event-generator-src }}
+      audit_event_generator_k8s: ${{ steps.changes.outputs.audit-event-generator-k8s }}
     steps:
-      - uses: actions/checkout@v4 # Checkout the repository to analyze changes
+      - uses: actions/checkout@v4
       - name: Check for changes in service directories
         id: changes
-        uses: dorny/paths-filter@v3 # Use the paths-filter action
+        uses: dorny/paths-filter@v3
         with:
           filters: |
-            event-audit-dashboard:
-              - 'src/event-audit-dashboard/**'
-            notification-service:
+            notification-service-src:
               - 'src/notification-service/**'
-            audit-log-analysis:
+            notification-service-k8s:
+              - 'k8s/charts/auditflow-platform/charts/notification-service/**'
+            audit-log-analysis-src:
               - 'src/audit-log-analysis/**'
-            audit-event-generator:
+            audit-log-analysis-k8s:
+              - 'k8s/charts/auditflow-platform/charts/audit-log-analysis/**'
+            event-audit-dashboard-src:
+              - 'src/event-audit-dashboard/**'
+            event-audit-dashboard-k8s:
+              - 'k8s/charts/auditflow-platform/charts/event-audit-dashboard/**'
+            audit-event-generator-src:
               - 'src/audit-event-generator/**'
-
-  # 2. Reusable workflow to build and push a single Docker image
-  # This makes the main workflow cleaner and reduces repetition.
-  # build_and_push_service:
-  #   needs: filter_changes # This reusable workflow job depends on the filter_changes job
-  #   uses: ./.github/workflows/build-single-service.yml # Path to the reusable workflow file
-  #   with:
-  #     service_name: ${{ github.event.inputs.service_name }} # Input: name of the service (e.g., 'event-audit-dashboard')
-  #     docker_org: ${{ DOCKER_ORG }} # Input: Docker Hub organization/username
-  #     docker_repo_prefix: ${{ DOCKER_REPO_PREFIX }} # Input: common repo prefix (empty in your case)
-  #     ref_name: ${{ github.ref_name }} # Input: current branch name (e.g., 'main', 'stage', 'dev')
-  #     github_sha: ${{ github.sha }} # Input: commit SHA for tagging
-  #   secrets:
-  #     DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }} # Pass Docker secrets
-  #     DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-
-  # # 3. Individual jobs for each application, conditionally triggered
-  # #    These jobs will call the reusable workflow if changes are detected.
-
-  build-event-audit-dashboard:
-    name: Build & Push event-audit-dashboard
-    needs: filter_changes
-    if: needs.filter_changes.outputs.event_audit_dashboard_changes == 'true' # Only run if changes detected
-    uses: ./.github/workflows/build-single-service.yml
-    permissions:
-      security-events: write
-    with:
-      service_name: event-audit-dashboard
-      service_module_name: event_audit_dashboard
-      docker_org: ${{ github.repository_owner }}
-      docker_repo_prefix: ""
-      ref_name: ${{ github.ref_name }}
-      github_sha: ${{ github.sha }}
-    secrets:
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+            audit-event-generator-k8s:
+              - 'k8s/charts/auditflow-platform/charts/audit-event-generator/**'
 
   build-notification-service:
-    name: Build & Push notification-service
+    name: Build & Tag notification-service
     needs: filter_changes
-    if: needs.filter_changes.outputs.notification_service_changes == 'true'
+    if: needs.filter_changes.outputs.notification_service_src == 'true' || needs.filter_changes.outputs.notification_service_k8s == 'true'
     uses: ./.github/workflows/build-single-service.yml
     permissions:
       security-events: write
@@ -81,32 +60,53 @@ jobs:
       docker_repo_prefix: ""
       ref_name: ${{ github.ref_name }}
       github_sha: ${{ github.sha }}
+      is_src_change: '${{ needs.filter_changes.outputs.notification_service_src }}'
     secrets:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
   build-audit-log-analysis:
-    name: Build & Push audit-log-analysis
+    name: Build & Tag audit-log-analysis
     needs: filter_changes
-    if: needs.filter_changes.outputs.audit_log_analysis_changes == 'true'
+    if: needs.filter_changes.outputs.audit_log_analysis_src == 'true' || needs.filter_changes.outputs.audit_log_analysis_k8s == 'true'
     uses: ./.github/workflows/build-single-service.yml
     permissions:
       security-events: write
     with:
       service_name: audit-log-analysis
+      docker_org: ${{ github.repository_owner }}
+      docker_repo_prefix: ""
       service_module_name: audit_analysis
+      ref_name: ${{ github.ref_name }}
+      github_sha: ${{ github.sha }}
+      is_src_change: '${{ needs.filter_changes.outputs.audit_log_analysis_src }}'
+    secrets:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
+  build-event-audit-dashboard:
+    name: Build & Tag event-audit-dashboard
+    needs: filter_changes
+    if: needs.filter_changes.outputs.event_audit_dashboard_src == 'true' || needs.filter_changes.outputs.event_audit_dashboard_k8s == 'true'
+    uses: ./.github/workflows/build-single-service.yml
+    permissions:
+      security-events: write
+    with:
+      service_name: event-audit-dashboard
+      service_module_name: event_audit_dashboard
       docker_org: ${{ github.repository_owner }}
       docker_repo_prefix: ""
       ref_name: ${{ github.ref_name }}
       github_sha: ${{ github.sha }}
+      is_src_change: '${{ needs.filter_changes.outputs.event_audit_dashboard_src }}'
     secrets:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
   build-audit-event-generator:
-    name: Build & Push audit-event-generator
+    name: Build & Tag audit-event-generator
     needs: filter_changes
-    if: needs.filter_changes.outputs.audit_event_generator_changes == 'true'
+    if: needs.filter_changes.outputs.audit_event_generator_src == 'true' || needs.filter_changes.outputs.audit_event_generator_k8s == 'true'
     uses: ./.github/workflows/build-single-service.yml
     permissions:
       security-events: write
@@ -117,6 +117,95 @@ jobs:
       docker_repo_prefix: ""
       ref_name: ${{ github.ref_name }}
       github_sha: ${{ github.sha }}
+      is_src_change: '${{ needs.filter_changes.outputs.audit_event_generator_src }}'
     secrets:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      
+  # New job to trigger the deploy workflow after all build jobs
+  trigger-deployment:
+    name: Trigger Deployment Workflow
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write 
+    # This job needs ALL build jobs to complete successfully
+    needs:
+      - filter_changes
+      - build-notification-service
+      - build-audit-log-analysis
+      - build-event-audit-dashboard
+      - build-audit-event-generator
+    if: |
+      always() &&
+      (needs.build-notification-service.result == 'success' || needs.build-notification-service.result == 'skipped') &&
+      (needs.build-audit-log-analysis.result == 'success' || needs.build-audit-log-analysis.result == 'skipped') &&
+      (needs.build-event-audit-dashboard.result == 'success' || needs.build-event-audit-dashboard.result == 'skipped') &&
+      (needs.build-audit-event-generator.result == 'success' || needs.build-audit-event-generator.result == 'skipped')
+    steps:
+      - name: Dispatch Deployment Workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const inputs = {
+              ref_name: '${{ github.ref_name }}',
+              github_sha: '${{ github.sha }}',
+              docker_org: '${{ github.repository_owner }}',
+              docker_repo_prefix: 'dummy-default-value',
+              changes: JSON.stringify({
+                'notification-service': { src: '${{ needs.filter_changes.outputs.notification_service_src }}', k8s: '${{ needs.filter_changes.outputs.notification_service_k8s }}' },
+                'audit-log-analysis': { src: '${{ needs.filter_changes.outputs.audit_log_analysis_src }}', k8s: '${{ needs.filter_changes.outputs.audit_log_analysis_k8s }}' },
+                'event-audit-dashboard': { src: '${{ needs.filter_changes.outputs.event_audit_dashboard_src }}', k8s: '${{ needs.filter_changes.outputs.event_audit_dashboard_k8s }}' },
+                'audit-event-generator': { src: '${{ needs.filter_changes.outputs.audit_event_generator_src }}', k8s: '${{ needs.filter_changes.outputs.audit_event_generator_k8s }}' }
+              })
+            }
+
+            console.log(inputs);
+            
+            const response = await github.rest.actions.createWorkflowDispatch({
+              owner: '${{ github.repository_owner }}',
+              repo: '${{ github.event.repository.name }}',
+              workflow_id: 'deploy-services.yml',
+              ref: '${{ github.ref }}',
+              inputs: inputs,
+            });
+            
+            console.log('Workflow dispatch initiated. Polling for new run...');
+            
+            const branchName = '${{ github.ref_name }}';
+            const commitSha = '${{ github.sha }}';
+            const startTime = new Date();
+            let foundRun = null;
+            
+            // Poll for up to 60 seconds to find the new workflow run
+            while (!foundRun && (new Date() - startTime) < 60000) {
+              const runs = await github.rest.actions.listWorkflowRuns({
+                owner: '${{ github.repository_owner }}',
+                repo: '${{ github.event.repository.name }}',
+                workflow_id: 'deploy-services.yml',
+                branch: branchName
+              });
+              
+              foundRun = runs.data.workflow_runs.find(run => run.head_sha === commitSha);
+              
+              if (!foundRun) {
+                console.log('New workflow run not found yet, waiting 5 seconds...');
+                await new Promise(r => setTimeout(r, 5000));
+              }
+            }
+            
+            if (foundRun) {
+              const runUrl = foundRun.html_url;
+              console.log('Found new workflow run ID:', foundRun.id);
+              console.log('New workflow run URL:', runUrl);
+              
+              core.summary.addRaw('### Deployment Workflow Started').addEOL();
+              core.summary.addRaw(`Click here to see the deployment progress: <a href="${runUrl}">${runUrl}</a>`).addEOL();
+              core.summary.addSeparator().addEOL();
+              core.summary.addRaw(`**Branch:** \`${branchName}\``).addEOL();
+              core.summary.addRaw(`**Commit:** \`${commitSha.substring(0, 8)}\``).addEOL();
+              core.summary.write();
+              
+            } else {
+              console.log('Could not find the new workflow run after 60 seconds.');
+            }

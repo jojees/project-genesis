@@ -1,0 +1,73 @@
+---
+name: 'Deploy single service'
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        required: true
+        type: string
+      k8s_namespace:
+        required: true
+        type: string
+      github_sha:
+        required: true
+        type: string
+      docker_org:
+        required: true
+        type: string
+      docker_repo_prefix:
+        required: true
+        type: string
+      is_holistic_deployment:
+        required: true
+        type: boolean
+      changes:
+        required: true
+        type: string
+      ref_name:
+        required: true
+        type: string
+
+jobs:
+  deploy-service:
+    runs-on: [self-hosted, 'homelab-pi5']
+    if: |
+      (
+        (inputs.k8s_namespace == 'test' && inputs.ref_name == 'feature/gh-cd-workflow') ||
+        (inputs.k8s_namespace == 'dev' && inputs.ref_name == 'dev') ||
+        (inputs.k8s_namespace == 'staging' && inputs.ref_name == 'staging')
+      ) &&
+      (
+        (inputs.ref_name == 'staging') ||
+        (fromJSON(inputs.changes)[inputs.service_name].src == 'true' || fromJSON(inputs.changes)[inputs.service_name].k8s == 'true')
+      )
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.github_sha }}
+      
+      - name: Setup Ansible Environment
+        working-directory: infra/ansible
+        run: |
+          # Install the Ansible Kubernetes collection
+          ansible-galaxy collection install -r requirements.yml
+          
+          # Install the necessary Python libraries for the collection
+          pip3 install kubernetes
+          pip3 install pyyaml
+          
+      - name: Run Ansible Playbook for Deployment
+        working-directory: infra/ansible
+        run: |
+          echo "localhost ansible_connection=local" > inventory.yml
+
+          ansible-playbook playbooks/deploy_k8s_services.yml \
+            -vvv \
+            --inventory inventory.yml \
+            --extra-vars "service_name=${{ inputs.service_name }} \
+                          k8s_namespace=${{ inputs.k8s_namespace }} \
+                          github_sha=${{ inputs.github_sha }} \
+                          docker_org=${{ inputs.docker_org }} \
+                          docker_repo_prefix=${{ inputs.docker_repo_prefix }} \
+                          is_holistic_deployment=${{ inputs.is_holistic_deployment }}"
