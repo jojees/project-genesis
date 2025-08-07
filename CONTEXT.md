@@ -2,7 +2,7 @@
 
 ## Project Summary
 
-**Project Genesis** is a comprehensive, hands-on learning initiative designed to build and manage a multi-service application within a modern **DevOps ecosystem**. It serves as a real-world sandbox demonstrating best practices across **DevOps, Site Reliability Engineering (SRE), DevSecOps, and FinDevOps**. The core application, the **AuditFlow Platform**, is orchestrated on a **Kubernetes (K3s)** cluster, showcasing the entire software delivery lifecycle from infrastructure provisioning to application deployment and ongoing operations, all managed as code.
+**Project Genesis** is a comprehensive, hands-on learning initiative designed to build and manage a multi-service application within a modern **DevOps ecosystem**. It serves as a real-world sandbox demonstrating best practices across **DevOps, Site Reliability Engineering (SRE), DevSecOps, and FinDevOps**. The core application, the **AuditFlow Platform**, is orchestrated on a **Kubernetes (K3s)** cluster, showcasing the entire software delivery lifecycle from infrastructure provisioning and **full lifecycle management of self-hosted runners** to application deployment and ongoing operations, all managed as code.
 
 ---
 
@@ -10,7 +10,7 @@
 
 The primary goals of Project Genesis are to provide practical experience in:
 * Designing and deploying the **AuditFlow Platform** in a Kubernetes environment.
-* Implementing **Infrastructure as Code (IaC)** for consistent and automated infrastructure provisioning.
+* Implementing **Infrastructure as Code (IaC)** for consistent and automated infrastructure provisioning, including full lifecycle management of critical components.
 * Building robust **CI/CD pipelines** for continuous integration and delivery.
 * Managing Kubernetes resources effectively using **Helm and Kustomize**.
 * Integrating **testing and code quality** into the development workflow.
@@ -27,7 +27,7 @@ The primary goals of Project Genesis are to provide practical experience in:
 * **Docker**: Containerization platform.
 * **GitHub Actions**: CI/CD automation.
 * **Terraform**: Infrastructure as Code for provisioning.
-* **Ansible**: Configuration management and K3s cluster setup.
+* **Ansible**: Configuration management, K3s cluster setup, and **full lifecycle management of GitHub Actions runners including API interaction**.
 * **Helm**: Kubernetes package manager.
 * **Kustomize**: Kubernetes configuration customization.
 * **Pytest**: Python testing framework.
@@ -47,6 +47,15 @@ The primary goals of Project Genesis are to provide practical experience in:
 * **Databases/Messaging:** PostgreSQL (persistent data), RabbitMQ (message broker), Redis (caching/temporary data)
 * **Security Tools:** Bandit (SAST), Trivy (SCA)
 * **Monitoring (Planned/Integrated):** Prometheus, Grafana
+
+---
+
+### Infrastructure as Code (IaC) Tools
+* **Ansible:** The primary IaC tool. It is responsible for:
+    * Initial provisioning and configuration of Raspberry Pi hosts for K3s.
+    * Installation and setup of K3s master and worker components.
+    * Deployment of the self-hosted GitHub Actions runner *as Kubernetes manifests* into the K3s cluster.
+    * **Full Lifecycle Management**: Ansible handles the complete lifecycle of the self-hosted GitHub Actions runner, including **initial deployment, updates, pre-deployment cleanup (deleting old runners from both K8s and GitHub's API), and post-deployment verification of its 'online' and 'idle' status directly via the GitHub API.**
 
 ---
 
@@ -112,7 +121,7 @@ The project emphasizes Infrastructure as Code (IaC) and automated deployments. K
 2.  **Infrastructure Provisioning:**
     * Review and adjust **Terraform configurations** in `infra/terraform/`.
     * Initialize and apply Terraform: `terraform init`, `terraform plan`, `terraform apply -auto-approve`.
-    * Configure the **K3s cluster** on provisioned nodes using **Ansible** (update `infra/ansible/inventory/hosts.ini` and run `ansible-playbook -i inventory/hosts.ini playbooks/setup-k3s.yaml`).
+    * Configure the **K3s cluster** on provisioned nodes using **Ansible**, and **deploy/manage the self-hosted GitHub Actions runner**: `ansible-playbook -i infra/ansible/inventory.ini infra/ansible/homelab.yaml` followed by `ansible-playbook -i infra/ansible/inventory.ini infra/ansible/deploy_github_runner.yaml`.
 3.  **Application Deployment:**
     * **Docker Images:** Built and pushed automatically to Docker Hub via GitHub Actions.
     * **Kubernetes Deployment:** Deploy the AuditFlow Platform using **Helm**. Navigate to the main Helm chart directory (e.g., `k8s/charts/events-app`), update dependencies (`helm dependency update`), and install (`helm install auditflow-platform . --namespace auditflow-platform --create-namespace -f values.yaml`).
@@ -153,7 +162,7 @@ Services communicate primarily via **RabbitMQ**, enabling a decoupled and scalab
 * **`notification-service` (Python Microservice):** Subscribes to specific event streams from RabbitMQ or listens for triggers from the `audit-log-analysis` service, sending out notifications (e.g., email, alerts) based on defined rules. It interacts with Postgres for notification-related data.
 * **`k8s/base`:** Contains the foundational Kubernetes YAML manifests for each service and infrastructure component (Postgres, RabbitMQ, Redis). These define Deployments, Services, StatefulSets, and PVCs.
 * **`infra/terraform`:** Holds Terraform configurations to provision the underlying cloud infrastructure (e.g., VMs for K3s nodes) required for the Kubernetes cluster.
-* **`infra/ansible`:** Contains Ansible playbooks to automate the installation and configuration of the K3s cluster on the provisioned infrastructure.
+* **`infra/ansible`:** Contains Ansible playbooks to automate the installation and configuration of the K3s cluster on the provisioned infrastructure, **including the full lifecycle management of the self-hosted GitHub Actions runner.**
 * **`docs/`:** Comprehensive documentation covering architecture, DevOps pillars, setup guides, and more.
 
 ---
@@ -193,7 +202,7 @@ gunicorn==20.1.0
 **Common scripts (conceptual, based on README.md and project structure):**
 
 * `terraform init/plan/apply`: For infrastructure provisioning (infra/terraform).
-* `ansible-playbook`: For K3s cluster setup (infra/ansible).
+* `ansible-playbook`: For K3s cluster setup and **GitHub Actions runner lifecycle management** (infra/ansible).
 * `docker build/push`: For building and pushing service images (automated via GitHub Actions).
 * `helm install/upgrade`: For deploying applications to Kubernetes (k8s/charts).
 * `pytest`: For running unit/integration tests within src/*/tests/.
@@ -220,6 +229,15 @@ The project leverages **GitHub Actions** for its **Continuous Integration and Co
     * **Multi-architecture Builds:** Configured to build Docker images for `linux/amd64` and `linux/arm64` platforms, ensuring broad compatibility.
     * **Image Tagging:** Automatically generates Docker image tags based on the commit SHA, branch name (e.g., `main` gets `latest`, `dev` gets `dev`, `dev-snapshot`), and a combination of `docker_org` and `service_name`.
     * **Caching:** Uses GitHub Actions cache (`type=gha`) to speed up Docker image builds.
+
+### Continuous Delivery (CD) Workflow
+
+* **`.github/workflows/deploy-services.yml` (Main CD Workflow):**
+    * **Trigger:** This workflow does not run on a `push` event. Instead, it is triggered by a **`workflow_dispatch` event**, which is initiated by the `build-python-services.yml` CI workflow upon a successful build. This controlled triggering mechanism ensures that the CD pipeline only runs after all CI checks have passed.
+    * **Runner Strategy:** This is a core feature of the project's CD strategy. The deployment jobs in this workflow run on a **self-hosted GitHub Actions runner** within the project's K3s cluster. This allows the workflow to have direct, secure access to the cluster's internal network and API.
+    * **Deployment Logic:** The workflow is an orchestrator. It calls the `deploy-single-service.yml` reusable workflow for each changed service.
+    * **Image Promotion:** It includes a dedicated job to promote the deployed immutable SHA-tagged image to a new environment tag (e.g., `auditflow-platform/notification-service:dev`) after the Helm deployment to the cluster is verified as successful.
+    * **Tooling:** This workflow's primary tool for interacting with the Kubernetes cluster is **Ansible**, which encapsulates the Helm deployment logic.
 
 ### Integrated Security Scans (DevSecOps):
 
@@ -306,11 +324,14 @@ The core inter-service communication relies heavily on **RabbitMQ** for an event
 ---
 
 ## Deployment Strategy & Rollbacks 🔄
-The deployment process relies on GitHub Actions for building Docker images and a Kubernetes base configuration `(k8s/base)` for defining the desired state.
+The deployment process relies on GitHub Actions to orchestrate the build and a self-hosted runner to execute the deployment logic via Ansible.
 
 **Current Knowns:**
-* **Initial Deployment:** Based on the `infra/terraform` and `infra/ansible` details, the initial infrastructure provisioning and K3s cluster setup are automated. Application deployment is via direct application of `k8s/base` manifests, or conceptually via Helm (once `k8s/charts` is populated).
-* **Rolling Updates:** Kubernetes Deployments, by default, employ a rolling update strategy when `replicas` are updated or the `template` changes.
+* **Initial Deployment:** The K3s cluster is provisioned by Ansible. Application deployment is performed by the `deploy_k8s_services.yml` Ansible playbook, which calls `helm upgrade --install` using the chart and a dynamically generated override file.
+* **Image Tagging:** Services are built as multi-architecture Docker images tagged with an immutable Git SHA.
+* **Environment Tags & Promotion:** After a successful deployment to `dev` or `staging`, a separate job promotes the immutable SHA tag to an environment-specific tag (e.g., `notification-service:dev`) on Docker Hub.
+* **Rolling Updates:** Kubernetes Deployments, by default, employ a rolling update strategy when the `template` (e.g., the image tag) changes.
+* **Manual Rollback Capability:** The **Helm** package manager provides a built-in mechanism for manual rollbacks to a previous deployment version (`helm rollback <release-name>`).
 
 **Future Enhancements (Planned/To Be Detailed):**
 * **Automated Rollback Mechanism:** Specific strategies and tooling (e.g., leveraging Helm's rollback capabilities) for quickly reverting to a previous stable version in case of a failed deployment.

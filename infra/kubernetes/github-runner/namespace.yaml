@@ -1,0 +1,8 @@
+# infra/kubernetes/github-runner/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: github-runner
+  labels:
+    app.kubernetes.io/name: github-runner
+    app.kubernetes.io/instance: github-runner-ns

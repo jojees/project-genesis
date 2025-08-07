@@ -1,0 +1,47 @@
+# eventsApp/event-audit-dashboard/k8s-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "event-audit-dashboard.fullname" . }}
+  labels:
+    {{- include "event-audit-dashboard.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      {{- include "event-audit-dashboard.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "event-audit-dashboard.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: default
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+      {{- range .Values.waitFor }}
+      {{ include "afp-wait-for" (dict "Name" .name "Port" .port "Context" $) | nindent 6 }}
+      {{- end }}
+      containers:
+      - name: event-audit-dashboard
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.imagePullPolicy }}
+        ports:
+        - containerPort: {{ .Values.ports.targetPort }}
+        env:
+        #   {{- range $key, $value := .Values.env }}
+        # - name: {{ $key }}
+        #   value: {{ $value | quote }}
+        #   {{- end }}
+          {{- $allEnv := list }}
+          {{- range $key, $value := .Values.env }}
+          {{- $allEnv = append $allEnv (dict "name" $key "value" (printf "%s" $value)) }}
+          {{- end }}
+          {{- $allEnv = append $allEnv (dict "name" "NOTIFICATION_SERVICE_HOST" "value" (printf "%s-notification-service" .Release.Name)) }}
+          {{- toYaml $allEnv | nindent 10 }}

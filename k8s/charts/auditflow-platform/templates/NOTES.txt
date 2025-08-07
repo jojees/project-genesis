@@ -1,0 +1,19 @@
+Thank you for installing the {{ include "auditflow-platform.fullname" . }} Helm chart!
+
+Your AuditFlow Platform services are being deployed to the '{{ .Release.Namespace }}' namespace.
+
+**Audit Event Generator:**
+This service produces synthetic audit events. It's an internal service and doesn't expose an external endpoint directly.
+You can inspect its logs:
+  kubectl logs -f $(kubectl get pods -n {{ .Release.Namespace }} -l "app.kubernetes.io/name=audit-event-generator,app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}") -n {{ .Release.Namespace }}
+
+
+**Next Steps:**
+1. Deploy RabbitMQ, PostgreSQL, and Redis if not already present.
+2. Configure internal DNS and Ingress for web-facing services (e.g., auditflow-dashboard).
+3. Consider setting up port-forwarding for debugging internal services:
+   kubectl port-forward svc/{{ .Release.Name }}-audit-event-generator 5000:5000 -n {{ .Release.Namespace }}
+   kubectl port-forward svc/{{ .Release.Name }}-audit-log-analysis 5001:5001 -n {{ .Release.Namespace }}
+   kubectl port-forward svc/{{ .Release.Name }}-notification-service 8000:8000 -n {{ .Release.Namespace }}
+
+For more details on the architecture and next steps, refer to your `CONTEXT.md` file. 

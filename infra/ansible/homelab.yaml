@@ -1,0 +1,17 @@
+# Playbook: K3s Cluster Deployment for Home Lab
+---
+- name: Gather K3s master information (token, IP)
+  hosts: k3s_master
+  gather_facts: no
+  roles:
+    - k3s_master
+
+- name: Add K3s worker nodes to the cluster
+  hosts: k3s_workers
+  gather_facts: yes
+  become: yes
+  vars:
+    k3s_node_token: "{{ hostvars[groups['k3s_master'][0]]['k3s_node_token'] }}"
+    k3s_master_ip: "{{ hostvars[groups['k3s_master'][0]]['k3s_master_ip'] }}"
+  roles:
+    - k3s_worker

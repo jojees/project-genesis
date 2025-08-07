@@ -1,0 +1,161 @@
+name: "CD: Deploy to dev/staging/test"
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref_name:
+        description: 'The branch name that triggered the CI workflow.'
+        required: true
+        type: string
+      github_sha:
+        description: 'The commit SHA from the CI workflow.'
+        required: true
+        type: string
+      docker_org:
+        description: 'The Docker organization/user name.'
+        required: true
+        type: string
+      docker_repo_prefix:
+        description: 'The prefix for the Docker repository name.'
+        required: true
+        type: string
+      changes:
+        description: 'JSON object containing a map of service changes (src and k8s).'
+        required: true
+        type: string
+
+jobs:
+  prepare-helm-overrides:
+    name: "Prepare Helm Overrides for ${{ inputs.ref_name }}"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Set override filename
+        id: set_filename
+        run: echo "OVERRIDE_FILENAME=deployment-overrides-${{ inputs.github_sha }}.yaml" >> $GITHUB_OUTPUT
+
+      - name: Generate deployment override file
+        id: generate_override
+        env:
+          BASE_VALUES_FILE: 'k8s/charts/values-dev.yaml'
+        run: python .github/scripts/generate_helm_override.py '${{ inputs.changes }}' '${{ inputs.github_sha }}' ${{ env.BASE_VALUES_FILE }} ${{ steps.set_filename.outputs.OVERRIDE_FILENAME }}
+
+      - name: Store override file as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-overrides-${{ inputs.github_sha }}
+          path: ${{ steps.set_filename.outputs.OVERRIDE_FILENAME }}
+
+  deploy:
+    name: "Deploy using Ansible"
+    runs-on: [self-hosted, 'homelab-pi5']
+    needs: prepare-helm-overrides
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.github_sha }}
+
+      - name: Download deployment override file
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-overrides-${{ inputs.github_sha }}
+          path: /tmp
+
+      - name: Determine deployment namespace
+        id: set_namespace
+        run: |
+          BRANCH_NAME="${{ inputs.ref_name }}"
+          
+          case "$BRANCH_NAME" in
+            "feature/gh-cd-workflow" | "feature/gh-trial-base")
+              TARGET_NAMESPACE="test"
+              ;;
+            *)
+              TARGET_NAMESPACE="$BRANCH_NAME"
+              ;;
+          esac
+          
+          echo "Setting target namespace to: $TARGET_NAMESPACE"
+          echo "namespace=$TARGET_NAMESPACE" >> $GITHUB_OUTPUT
+
+      - name: Setup Ansible environment and install dependencies
+        working-directory: infra/ansible
+        run: |
+          # Install the Ansible Kubernetes collection from requirements.yml
+          ansible-galaxy collection install -r requirements.yml
+          
+          # Install the necessary Python libraries for Ansible's Kubernetes modules
+          pip3 install kubernetes pyyaml
+
+      - name: Run Ansible Playbook for Deployment
+        working-directory: infra/ansible
+        run: |
+          ansible-playbook playbooks/deploy_k8s_services.yml \
+            --extra-vars "release_name_from_gha=${{ steps.set_namespace.outputs.namespace }}-afp" \
+            --extra-vars "namespace_from_gha=${{ steps.set_namespace.outputs.namespace }}" \
+            --extra-vars "chart_name_from_gha=auditflow-platform" \
+            --extra-vars "override_file_from_gha=/tmp/deployment-overrides-${{ inputs.github_sha }}.yaml" \
+            -vvv
+
+  promote-images-after-deployment:
+    name: "Promote Image Tags After Successful Deployment"
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: success()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download deployment override file
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-overrides-${{ inputs.github_sha }}
+          path: /tmp
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # This job runs on a public runner and needs the namespace determined on the self-hosted runner.
+      # To avoid potential communication issues between runner types, we re-run the namespace logic here.
+      - name: Determine deployment namespace
+        id: set_namespace
+        run: |
+          BRANCH_NAME="${{ inputs.ref_name }}"
+          
+          case "$BRANCH_NAME" in
+            "feature/gh-cd-workflow" | "feature/gh-trial-base")
+              TARGET_NAMESPACE="test"
+              ;;
+            *)
+              TARGET_NAMESPACE="$BRANCH_NAME"
+              ;;
+          esac
+          
+          echo "Setting target namespace to: $TARGET_NAMESPACE"
+          echo "namespace=$TARGET_NAMESPACE" >> $GITHUB_OUTPUT
+
+      - name: Run image promotion script
+        env:
+          OVERRIDE_FILE: /tmp/deployment-overrides-${{ inputs.github_sha }}.yaml
+        run: |
+          python3 .github/scripts/promote_images.py \
+            --override-file ${{ env.OVERRIDE_FILE }} \
+            --github-sha ${{ inputs.github_sha }} \
+            --docker-org ${{ inputs.docker_org }} \
+            --namespace ${{ steps.set_namespace.outputs.namespace }}
