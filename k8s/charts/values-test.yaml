@@ -1,0 +1,21 @@
+audit-event-generator:
+  enabled: true
+  image:
+    tag: test
+audit-log-analysis:
+  enabled: true
+  image:
+    tag: test
+notification-service:
+  enabled: true
+  image:
+    tag: test
+event-audit-dashboard:
+  enabled: true
+  image:
+    tag: test
+redis:
+  auth:
+    enabled: false
+    password: "" 
+    allowEmptyPassword: yes 
