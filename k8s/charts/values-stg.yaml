@@ -1,0 +1,27 @@
+# k8s/charts/values-dev.yaml
+
+audit-event-generator:
+  enabled: true
+  image:
+    tag: dev
+audit-log-analysis:
+  enabled: true
+  image:
+    tag: dev
+notification-service:
+  enabled: true
+  image:
+    tag: dev
+event-audit-dashboard:
+  enabled: true
+  image:
+    tag: dev
+  ports:
+    nodePort: "30091"
+
+redis:
+  auth:
+    enabled: false
+    # These two lines are crucial to override the Bitnami chart's security defaults
+    password: "" 
+    allowEmptyPassword: yes 
