@@ -16,6 +16,8 @@ event-audit-dashboard:
   enabled: true
   image:
     tag: dev
+  ports:
+    nodePort: "30090"
 
 redis:
   auth:
