@@ -1,0 +1,20 @@
+global:
+  namespace: logging
+
+fluent-bit:
+  enabled: true
+
+loki:
+  enabled: true
+  singleBinary:
+    replicas: 1
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClassName: standard
+
+grafana:
+  enabled: true
+  service:
+    type: NodePort
+    nodePort: 30000
