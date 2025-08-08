@@ -1,0 +1,58 @@
+replicaCount: 1
+
+image:
+  repository: jojees/notification-service
+  tag: 0.1.6
+  pullPolicy: IfNotPresent
+
+env:
+# RabbitMQ details
+- name: RABBITMQ_PORT
+  value: "5672"
+- name: RABBITMQ_USER
+  value: "jdevlab"
+- name: RABBITMQ_PASS
+  value: "jdevlab"
+- name: RABBITMQ_ALERT_QUEUE
+  value: "audit_alerts"
+# Service details
+- name: SERVICE_NAME
+  value: "NotificationService"
+- name: API_HOST
+  value: "0.0.0.0"
+- name: API_PORT
+  value: "8000"
+- name: log_level
+  value: INFO
+
+waitFor:
+  - name: postgres
+    port: 5432
+  - name: rabbitmq
+    port: 5672
+
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "256Mi"
+    cpu: "200m"
+
+service:
+  appPort: 8000
+  appPortName: http-api
+  type: ClusterIP
+
+podSecurityContext: {}
+imagePullSecrets: []
+
+secrets:
+  postgresql:
+    name: postgres-credentials
+  rabbitmq:
+    name: rabbitmq-credentials
+
+postgresql: # New block for PostgreSQL connection details (defaults)
+  serviceName: postgres-service # Static default for PG service name
+  port: 5432 # Static default for PG port

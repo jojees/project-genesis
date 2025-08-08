@@ -1,0 +1,29 @@
+---
+- name: Gather system facts
+  ansible.builtin.setup:
+
+- name: Install dependencies
+  ansible.builtin.apt:
+    name:
+      - curl
+      - gnupg2
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Install K3s worker
+  ansible.builtin.shell: |
+    curl -sfL https://get.k3s.io | K3S_URL=https://{{ k3s_master_ip }}:{{ k3s_api_port }} K3S_TOKEN={{ k3s_node_token }} sh -
+  args:
+    creates: /etc/systemd/system/k3s-agent.service
+  become: true
+  environment:
+    K3S_NODE_NAME: "{{ ansible_hostname }}"
+
+- name: Ensure K3s agent service is running and enabled
+  ansible.builtin.systemd:
+    name: k3s-agent
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  become: true

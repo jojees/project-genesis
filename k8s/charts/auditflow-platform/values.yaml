@@ -1,0 +1,86 @@
+# k8s/charts/auditflow-platform/values.yaml
+
+audit-event-generator:
+  enabled: true
+audit-log-analysis:
+  enabled: true
+notification-service:
+  enabled: true
+  postgresql:
+    auth:
+      username: "audituser"
+      database: "alerts_db"
+    port: 5432
+  waitFor:
+    - name: postgresql
+      port: 5432
+    - name: rabbitmq
+      port: 5672
+event-audit-dashboard:
+  enabled: true
+
+postgresql:
+  enabled: true
+  auth:
+    # These values will be used by the Bitnami PostgreSQL chart
+    # to create the database, user, and the Kubernetes Secret.
+    username: "audituser" # This will be the PG_USER
+    password: "your_secure_postgres_password" # IMPORTANT: REPLACE THIS WITH A REAL, SECURE PASSWORD
+    database: "alerts_db" # This will be the PG_DB
+    secretKeys: # Ensure these keys match what notification-service's secretKeyRef expects
+      adminPasswordKey: "password" # Bitnami's key for admin password
+      userPasswordKey: "postgres-password" # Assuming user password is the same as admin for simplicity
+  primary:
+    persistence:
+      enabled: true
+      storageClass: "local-path"
+      size: "5Gi"
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 200m
+        memory: 512Mi
+  service:
+    type: ClusterIP
+    ports:
+      postgresql: 5432
+
+
+rabbitmq:
+  enabled: true
+  auth:
+    username: "jdevlab"
+    password: "jdevlab"
+  persistence:
+    enabled: false
+  service:
+    type: ClusterIP
+    port: 5672
+    manager:
+      port: 15672
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+redis:
+  enabled: true
+  architecture: standalone
+  master:
+    persistence:
+      enabled: false
+  service:
+    type: ClusterIP
+    port: 6379
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi

@@ -273,3 +273,14 @@ Thumbs.db # Windows
 # Bandit scan results
 **/bandit_results.sarif
 **/bandit_results.json
+
+# Helm chart artifacts
+k8s/charts/**/*.tgz
+k8s/charts/**/charts/*/
+
+# DO NOT ignore source directories for local subcharts
+# This must be precise and match the path to your source subchart directory.
+!k8s/charts/auditflow-platform/charts/audit-event-generator/
+!k8s/charts/auditflow-platform/charts/audit-log-analysis/
+!k8s/charts/auditflow-platform/charts/event-audit-dashboard/
+!k8s/charts/auditflow-platform/charts/notification-service/

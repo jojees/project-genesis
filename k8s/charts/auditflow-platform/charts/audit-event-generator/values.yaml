@@ -1,0 +1,76 @@
+# k8s/charts/auditflow-platform/charts/audit-event-generator/values.yaml
+
+replicaCount: 1
+
+imagePullSecrets: []
+podSecurityContext: {}
+
+image:
+  repository: jojees/audit-event-generator
+  tag: latest # Overrides Chart.AppVersion if set
+  pullPolicy: IfNotPresent
+
+initContainer:
+  enabled: true
+  rabbitmq:
+    host: "{{ .Release.Name }}-rabbitmq"
+    port: 5672
+
+waitFor:
+  - name: rabbitmq
+    port: 5672
+
+service:
+  type: ClusterIP
+  appPort: 5000
+  appPortName: http-app
+  metricsPort: 8000
+  metricsPortName: http-metrics
+  # No nodePort needed for ClusterIP
+
+# Environment variables specific to this service
+env:
+  # RABBITMQ_HOST: rabbitmq-service
+  RABBITMQ_USER: jdevlab
+  RABBITMQ_PASS: jdevlab # In a real scenario, this would come from a Secret
+  RABBITMQ_QUEUE: audit_events
+  APP_PORT: "5000"
+  PROMETHEUS_PORT: "8000"
+  EVENT_GENERATION_INTERVAL_SECONDS: "10"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+livenessProbe:
+  enabled: true
+  path: /healthz
+  port: http-app
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+
+readinessProbe:
+  enabled: true
+  path: /healthz
+  port: http-app
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Observability annotations for Prometheus
+# Note: These are applied to the Pod template, not the Service directly.
+# The Service also needs appropriate labels for discovery.
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8000" # Prometheus metrics port
+
+# You might also want to add serviceAccount, securityContext, etc. as needed.
+ingress:
+  enabled: false

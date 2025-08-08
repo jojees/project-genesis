@@ -1,0 +1,13 @@
+# infra/kubernetes/github-runner/github-runner-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: github-runner-pv-claim
+  namespace: github-runner # IMPORTANT: Must be in the same namespace as the deployment
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi # Adjust storage size as needed for your runner's work
+  storageClassName: local-path # Use the local-path storage class that K3s provides
