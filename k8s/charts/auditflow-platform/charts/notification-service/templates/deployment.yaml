@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "notification-service.fullname" . }}
+  labels:
+    {{- include "notification-service.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "notification-service.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "notification-service.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: default
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+      {{- range .Values.waitFor }}
+      {{ include "afp-wait-for" (dict "Name" .name "Port" .port "Context" $) | nindent 6 }}
+      {{- end }}
+      containers:
+      - name: notification-service
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.service.appPort }}
+        env:
+        {{- $allEnv := .Values.env }}
+        {{- $allEnv = append $allEnv (dict "name" "RABBITMQ_HOST" "value" (printf "%s-rabbitmq" .Release.Name)) }}
+        {{- $allEnv = append $allEnv (dict "name" "ENVIRONMENT" "value" (printf "%s" .Release.Name)) }}
+        {{- $allEnv = append $allEnv (dict "name" "PG_HOST" "value" (printf "%s-postgresql" .Release.Name )) }}
+        {{- $allEnv = append $allEnv (dict "name" "PG_PORT" "value" (.Values.postgresql.port | toString )) }}
+        {{- $allEnv = append $allEnv (dict "name" "PG_DB" "value" (.Values.postgresql.auth.database | toString )) }}
+        {{- $allEnv = append $allEnv (dict "name" "PG_USER" "value" (.Values.postgresql.auth.username | toString )) }}
+        {{- $allEnv = append $allEnv (dict "name" "PG_PASSWORD" "valueFrom" (dict "secretKeyRef" (dict "name" (printf "%s-postgresql" .Release.Name) "key" "postgres-password"))) }}
+        {{- toYaml $allEnv | nindent 10 }}
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}

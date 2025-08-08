@@ -1,0 +1,16 @@
+# infra/kubernetes/github-runner/clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: github-runner-binding
+  labels:
+    app.kubernetes.io/name: github-runner
+    app.kubernetes.io/instance: github-runner-binding
+subjects:
+- kind: ServiceAccount
+  name: github-runner-sa
+  namespace: github-runner # Must match the namespace defined in serviceaccount.yaml
+roleRef:
+  kind: ClusterRole
+  name: github-runner-role # Must match the ClusterRole defined above
+  apiGroup: rbac.authorization.k8s.io

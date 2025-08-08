@@ -1,0 +1,58 @@
+# infra/kubernetes/github-runner/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: github-runner-deployment
+  namespace: github-runner
+  labels:
+    app.kubernetes.io/name: github-runner
+    app.kubernetes.io/instance: github-runner-deployment
+spec:
+  replicas: 1 # You can scale this up if you need multiple concurrent runners
+  selector:
+    matchLabels:
+      app: github-runner
+  template:
+    metadata:
+      labels:
+        app: github-runner
+    spec:
+      serviceAccountName: github-runner-sa # Link to the ServiceAccount
+      nodeSelector:
+        kubernetes.io/arch: arm64 # Ensures it runs on your Raspberry Pi 5s
+      containers:
+      - name: github-runner
+        image: jojees/github-actions-runner-arm64:latest 
+        imagePullPolicy: Always
+        env:
+        - name: GITHUB_REPOSITORY_URL
+          value: "https://github.com/jojees/project-genesis" 
+        - name: GITHUB_RUNNER_LABELS
+          value: "self-hosted,linux,arm64,homelab-pi5" 
+        - name: RUNNER_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: RUNNER_WORKDIR
+          value: "/home/runner/_work" 
+        - name: GITHUB_TOKEN 
+          valueFrom:
+            secretKeyRef:
+              name: github-runner-secret
+              key: GITHUB_RUNNER_TOKEN
+        - name: RUNNER_DEBUG
+          value: "1"
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 500m # Max half CPU core
+            memory: 1Gi
+        volumeMounts:
+        - name: runner-work-dir
+          mountPath: /home/runner/_work
+      volumes:
+      - name: runner-work-dir
+        persistentVolumeClaim:
+          claimName: github-runner-pv-claim

@@ -1,0 +1,16 @@
+# eventsApp/notification-service/k8s-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "notification-service.fullname" . }}
+  labels:
+    {{- include "notification-service.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "notification-service.selectorLabels" . | nindent 4 }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.service.appPort }}
+      targetPort: {{ .Values.service.appPort }}
+      name: {{ .Values.service.appPortName }}
+  type: {{ .Values.service.type }}

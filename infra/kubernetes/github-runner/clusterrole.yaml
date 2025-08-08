@@ -1,0 +1,28 @@
+# infra/kubernetes/github-runner/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: github-runner-role
+  labels:
+    app.kubernetes.io/name: github-runner
+    app.kubernetes.io/instance: github-runner-role
+rules:
+  # Allow the runner to get, list, watch, create, update, delete various resources
+  # in any namespace required for application deployment (e.g., Deployments, Services, Pods, ConfigMaps, Secrets, PVCs, etc.)
+  - apiGroups: ["", "apps", "extensions", "batch", "networking.k8s.io", "storage.k8s.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Allow the runner to manage RBAC for deployed applications if needed
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Allow access to namespaces for creating/managing them (if required by CI/CD pipeline)
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Allow access to Kustomize/Helm specific resources if any custom resource definitions (CRDs) are involved
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch"]
+  # Add more specific permissions as needed for your deployment requirements.
+  # E.g., if you use ingress, metrics, external-dns, cert-manager etc.

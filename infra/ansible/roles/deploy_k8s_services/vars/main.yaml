@@ -1,0 +1,38 @@
+---
+# # This variable constructs the Docker image repository path based on the docker_repo_prefix
+# image_repository: >-
+#   {{ docker_org }}/
+#   {% if docker_repo_prefix == 'dummy-default-value' %}
+#     {{ service_name }}
+#   {% else %}
+#     {{ docker_repo_prefix }}{{ service_name }}
+#   {% endif %}
+
+#   # This variable constructs the full, absolute path to the auditflow-platform charts
+# k8s_charts_path: "{{ playbook_dir }}/../../../k8s/charts/auditflow-platform"
+
+# # This variable is used to disable sub-charts in the umbrella chart for single service deployments
+# umbrella_chart_values_disabled:
+#   audit-event-generator:
+#     enabled: false
+#   audit-log-analysis:
+#     enabled: false
+#   notification-service:
+#     enabled: false
+#   event-audit-dashboard:
+#     enabled: false
+#   redis:
+#     enabled: false
+#   rabbitmq:
+#     enabled: false
+#   postgresql:
+#     enabled: true
+
+
+# Variables for the deploy_k8s_services role.
+# These values are expected to be passed from the playbook.
+helm_release_name: "{{ release_name_from_gha }}"
+helm_namespace: "{{ namespace_from_gha }}"
+chart_path: "{{ playbook_dir }}/../../../k8s/charts/auditflow-platform"
+values_file_path: "{{ values_file_from_gha }}"
+override_values_file_path: "{{ override_file_from_gha }}"
