@@ -45,10 +45,43 @@ jobs:
         id: set_filename
         run: echo "OVERRIDE_FILENAME=deployment-overrides-${{ inputs.github_sha }}.yaml" >> $GITHUB_OUTPUT
 
+      - name: Determine deployment namespace and base values file
+        id: set_namespace_and_base_values
+        run: |
+          BRANCH_NAME="${{ inputs.ref_name }}"
+
+          case "$BRANCH_NAME" in
+            "feature/"*)
+              TARGET_NAMESPACE="test"
+              ;;
+            "staging")
+              TARGET_NAMESPACE="stg"
+              ;;
+            *)
+              TARGET_NAMESPACE="$BRANCH_NAME"
+              ;;
+          esac
+
+          DYNAMIC_VALUES_FILE="k8s/charts/values-${TARGET_NAMESPACE}.yaml"
+          DEFAULT_VALUES_FILE="k8s/charts/values-test.yaml"
+
+          if [ -f "$DYNAMIC_VALUES_FILE" ]; then
+            BASE_VALUES_FILE_PATH="$DYNAMIC_VALUES_FILE"
+            echo "Using dynamic base values file: $BASE_VALUES_FILE_PATH"
+          else
+            BASE_VALUES_FILE_PATH="$DEFAULT_VALUES_FILE"
+            echo "Dynamic base values file ($DYNAMIC_VALUES_FILE) not found. Falling back to default: $BASE_VALUES_FILE_PATH"
+          fi
+
+          echo "Setting target namespace to: $TARGET_NAMESPACE"
+          echo "namespace=$TARGET_NAMESPACE" >> $GITHUB_OUTPUT
+          echo "base_values_file=$BASE_VALUES_FILE_PATH" >> $GITHUB_OUTPUT
+          echo "$TARGET_NAMESPACE" > deployment_namespace_${{ inputs.github_sha }}.txt
+
       - name: Generate deployment override file
         id: generate_override
         env:
-          BASE_VALUES_FILE: 'k8s/charts/values-dev.yaml'
+          BASE_VALUES_FILE: '${{ steps.set_namespace_and_base_values.outputs.base_values_file }}'
         run: python .github/scripts/generate_helm_override.py '${{ inputs.changes }}' '${{ inputs.github_sha }}' ${{ env.BASE_VALUES_FILE }} ${{ steps.set_filename.outputs.OVERRIDE_FILENAME }}
 
       - name: Store override file as artifact
@@ -56,6 +89,12 @@ jobs:
         with:
           name: deployment-overrides-${{ inputs.github_sha }}
           path: ${{ steps.set_filename.outputs.OVERRIDE_FILENAME }}
+
+      - name: Store namespace as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-namespace-${{ inputs.github_sha }}
+          path: deployment_namespace_${{ inputs.github_sha }}.txt
 
   deploy:
     name: "Deploy using Ansible"
@@ -74,22 +113,18 @@ jobs:
           name: deployment-overrides-${{ inputs.github_sha }}
           path: /tmp
 
-      - name: Determine deployment namespace
-        id: set_namespace
+      - name: Download deployment namespace
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-namespace-${{ inputs.github_sha }}
+          path: /tmp
+
+      - name: Read deployment namespace
+        id: get_namespace
         run: |
-          BRANCH_NAME="${{ inputs.ref_name }}"
-          
-          case "$BRANCH_NAME" in
-            "feature/gh-cd-workflow" | "feature/gh-trial-base")
-              TARGET_NAMESPACE="test"
-              ;;
-            *)
-              TARGET_NAMESPACE="$BRANCH_NAME"
-              ;;
-          esac
-          
-          echo "Setting target namespace to: $TARGET_NAMESPACE"
-          echo "namespace=$TARGET_NAMESPACE" >> $GITHUB_OUTPUT
+          DEPLOYMENT_NAMESPACE=$(cat /tmp/deployment_namespace_${{ inputs.github_sha }}.txt)
+          echo "Retrieved deployment namespace: $DEPLOYMENT_NAMESPACE"
+          echo "namespace=$DEPLOYMENT_NAMESPACE" >> $GITHUB_OUTPUT
 
       - name: Setup Ansible environment and install dependencies
         working-directory: infra/ansible
@@ -104,8 +139,8 @@ jobs:
         working-directory: infra/ansible
         run: |
           ansible-playbook playbooks/deploy_k8s_services.yml \
-            --extra-vars "release_name_from_gha=${{ steps.set_namespace.outputs.namespace }}-afp" \
-            --extra-vars "namespace_from_gha=${{ steps.set_namespace.outputs.namespace }}" \
+            --extra-vars "release_name_from_gha=${{ steps.get_namespace.outputs.namespace }}-afp" \
+            --extra-vars "namespace_from_gha=${{ steps.get_namespace.outputs.namespace }}" \
             --extra-vars "chart_name_from_gha=auditflow-platform" \
             --extra-vars "override_file_from_gha=/tmp/deployment-overrides-${{ inputs.github_sha }}.yaml" \
             -vvv
@@ -125,30 +160,24 @@ jobs:
           name: deployment-overrides-${{ inputs.github_sha }}
           path: /tmp
 
+      - name: Download deployment namespace
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-namespace-${{ inputs.github_sha }}
+          path: /tmp
+
+      - name: Read deployment namespace
+        id: get_namespace
+        run: |
+          DEPLOYMENT_NAMESPACE=$(cat /tmp/deployment_namespace_${{ inputs.github_sha }}.txt)
+          echo "Retrieved deployment namespace: $DEPLOYMENT_NAMESPACE"
+          echo "namespace=$DEPLOYMENT_NAMESPACE" >> $GITHUB_OUTPUT # Output for use in subsequent steps
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-
-      # This job runs on a public runner and needs the namespace determined on the self-hosted runner.
-      # To avoid potential communication issues between runner types, we re-run the namespace logic here.
-      - name: Determine deployment namespace
-        id: set_namespace
-        run: |
-          BRANCH_NAME="${{ inputs.ref_name }}"
-          
-          case "$BRANCH_NAME" in
-            "feature/gh-cd-workflow" | "feature/gh-trial-base")
-              TARGET_NAMESPACE="test"
-              ;;
-            *)
-              TARGET_NAMESPACE="$BRANCH_NAME"
-              ;;
-          esac
-          
-          echo "Setting target namespace to: $TARGET_NAMESPACE"
-          echo "namespace=$TARGET_NAMESPACE" >> $GITHUB_OUTPUT
 
       - name: Run image promotion script
         env:
@@ -158,4 +187,4 @@ jobs:
             --override-file ${{ env.OVERRIDE_FILE }} \
             --github-sha ${{ inputs.github_sha }} \
             --docker-org ${{ inputs.docker_org }} \
-            --namespace ${{ steps.set_namespace.outputs.namespace }}
+            --namespace ${{ steps.get_namespace.outputs.namespace }}
