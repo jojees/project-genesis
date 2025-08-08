@@ -1,10 +1,10 @@
 # Project Genesis
-<!---
-[![CI/CD Status](https://github.com/jojees/project-genesis/actions/workflows/k8s-deploy.yaml/badge.svg)](https://github.com/jojees/project-genesis/actions/workflows/k8s-deploy.yaml)
---->
+
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![codecov](https://codecov.io/github/jojees/project-genesis/graph/badge.svg?token=E6244R8XGA)](https://codecov.io/github/jojees/project-genesis)
 [![Code Scanning status](https://github.com/jojees/project-genesis/actions/workflows/build-python-services.yml/badge.svg)](https://github.com/jojees/project-genesis/security/code-scanning)
+[![CI Status](https://github.com/jojees/project-genesis/actions/workflows/build-python-services.yml/badge.svg)](https://github.com/jojees/project-genesis/actions/workflows/build-python-services.yml)
+[![CD Status](https://github.com/jojees/project-genesis/actions/workflows/deploy-services.yml/badge.svg)](https://github.com/jojees/project-genesis/actions/workflows/deploy-services.yml)
 
 ---
 
@@ -75,16 +75,17 @@ Project Genesis utilizes a diverse set of industry-standard tools and technologi
 * **Container Registry:** [Docker Hub](https://hub.docker.com/u/jojees)
 * **Kubernetes Distribution:** [K3s](https://k3s.io/) (Lightweight Kubernetes)
 * **Programming Language:** [Python](https://www.python.org/)
-<!--* **Kubernetes Package Manager:** [Helm](https://helm.sh/)
-* **Kubernetes Configuration Customization:** [Kustomize](https://kustomize.io/)
+* **Kubernetes Package Manager:** [Helm](https://helm.sh/)
 * **Testing Framework:** [Pytest](https://docs.pytest.org/en/stable/) (for Python application testing)
 * **Code Coverage:** [Coverage.py](https://coverage.readthedocs.io/en/latest/) (integrated with Pytest)
+<!--* **Kubernetes Configuration Customization:** [Kustomize](https://kustomize.io/)
 * **Monitoring & Alerting:**
     * [Prometheus](https://prometheus.io/): For metrics collection and time-series data.
     * [Grafana](https://grafana.com/): For data visualization and dashboarding.
-* **Infrastructure as Code (IaC):**
     * [Terraform](https://www.terraform.io/): For provisioning and managing infrastructure resources.
-    * [Ansible](https://www.ansible.com/): For configuration management and K3s cluster setup. -->
+    -->
+* **Infrastructure as Code (IaC):**
+    * [Ansible](https://www.ansible.com/): For configuration management and K3s cluster setup. 
 ---
 
 ## Directory Structure
@@ -174,7 +175,7 @@ To get **Project Genesis** up and running, follow these high-level steps. Detail
 
 **Project Genesis** is structured to explicitly demonstrate key DevOps principles:
 
-* **DevOps:** Full automation from code commit to deployment, fostering collaboration and rapid feedback cycles for the `AuditFlow Platform`.
+* **DevOps:** Full automation from code commit to deployment using a hybrid runner strategy, fostering collaboration and rapid feedback cycles for the `AuditFlow Platform`.
 * **Site Reliability Engineering (SRE):** Focus on observability (Prometheus, Grafana), defining SLOs/SLAs, and building resilient, self-healing systems for the `AuditFlow Platform`.
 * **DevSecOps:** Integration of security best practices throughout the SDLC, including **automated Static Application Security Testing (SAST) with Bandit for Python services**, **Software Composition Analysis (SCA) and vulnerability scanning of Docker images with Trivy**, and secure Kubernetes configurations for the `AuditFlow Platform`.
 * **FinDevOps:** Awareness and implementation of cost-efficient strategies in cloud-native environments, such as resource optimization, effective scaling, and cost monitoring of the `AuditFlow Platform` and its underlying infrastructure.
@@ -198,7 +199,7 @@ Project Genesis incorporates several security best practices:
     * **Output Format:** SARIF
     * **Integration Point:** GitHub Actions (`.github/workflows/build-single-service.yml`)
     * **View Results:** Check the [Code scanning alerts](https://github.com/jojees/project-genesis/security/code-scanning) in the GitHub repository's Security tab.
-* **Secure Configuration:** Placeholder for Kubernetes security best practices (e.g., Network Policies, RBAC).
+* **Secure Configuration:** Kubernetes security best practices are enforced through Infrastructure as Code. The **self-hosted runner deployment and its lifecycle are managed by Ansible,* ensuring a consistent and secure setup without manual intervention.
 
 ---
 
