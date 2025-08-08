@@ -1,19 +1,19 @@
 audit-event-generator:
   enabled: true
   image:
-    tag: test
+    tag: dev
 audit-log-analysis:
   enabled: true
   image:
-    tag: test
+    tag: dev
 notification-service:
   enabled: true
   image:
-    tag: test
+    tag: dev
 event-audit-dashboard:
   enabled: true
   image:
-    tag: test
+    tag: dev
 redis:
   auth:
     enabled: false
